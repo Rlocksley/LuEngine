@@ -1,0 +1,45 @@
+#version 450
+
+struct Transform{
+    mat4 model;
+    mat4 normal;
+    vec4 scale; // xyz = scale, w = padding
+    vec4 rotation; // quaternion
+    vec4 position;
+};
+
+// Struktur für eine einzelne Instanz im Eingabepuffer
+struct TransformInstance {
+    Transform transform;
+    uint id;
+    vec3 pad;
+};
+
+// Layout-Konfiguration für die Ausführung (Workgroup-Größe)
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// Eingabepuffer: Enthält die Instanz-Daten
+layout(std430, binding = 0) readonly buffer InputBuffer {
+    TransformInstance instances[];
+};
+
+// Ausgabepuffer: Hier werden die Meshes an die Position ihrer ID geschrieben
+layout(std430, binding = 1) writeonly buffer TransformBuffer {
+    Transform transforms[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint instanceBufferSize;
+} pc;
+
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+
+    if (index >= pc.instanceBufferSize) {
+        return;
+    }
+
+    TransformInstance instance = instances[index];
+    transforms[instance.id] = instance.transform;
+}

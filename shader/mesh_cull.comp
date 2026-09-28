@@ -1,0 +1,168 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+
+// Define the workgroup size
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+// ------------------------------------------------------------------
+// Structs
+// ------------------------------------------------------------------
+
+struct Transform{
+    mat4 model;
+    mat4 normal;
+    vec4 scale; // xyz = scale, w = padding
+    vec4 rotation; // quaternion
+    vec4 position;
+};
+
+struct MeshInfo {
+    uint indexCount;
+    uint firstIndex;
+    uint vertexCount;
+    int  vertexOffset;
+    vec4 boundingSphere; // xyz = local center, w = radius
+};
+
+struct Material{
+    ivec4 texturesIds; // x = albedo, y = normal, z = roughness, w = metallic
+    vec4 albedo;
+    vec4 ambient;
+    vec4 emission;
+    float roughness;
+    float metallic;
+    vec2 _pad;
+};
+
+struct Mesh {
+    Material material;
+    uint transformId;   
+    uint pipelineId;       
+    uint meshInfoId;
+    uint valid;
+};
+
+// Fits VkDrawIndexedIndirectCommand
+struct DrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int  vertexOffset;
+    uint firstInstance;
+};
+
+
+
+// ------------------------------------------------------------------
+// Bindings
+// ------------------------------------------------------------------
+
+// Binding 0: Camera / Frustum Data
+layout(set = 0, binding = 0) uniform CameraData {
+    vec4 frustumPlanes[6];
+    mat4 projection;       // Projection matrix
+    mat4 view;             // View matrix (world → view)
+    mat4 viewProjection;
+    mat4 inverseProjection;// Inverse of projection
+    vec4 camPos;
+    vec4 camDir;
+    vec2 screenSize;       // Width, height in pixels
+    float nearClip;        // Near plane distance
+    float farClip;         // Far plane distance
+} cam;
+
+layout(set = 0, binding = 1) readonly buffer TransformBuffer {
+    Transform transforms[];
+} transforms;
+
+layout(set = 0, binding = 2) readonly buffer MeshInfoBuffer {
+    MeshInfo meshInfos[];
+} meshInfos;
+
+layout(set = 0, binding = 3) readonly buffer MeshBuffer {
+    Mesh meshes[];
+} meshes;
+
+layout(set = 0, binding = 4) buffer DrawCountBuffer {
+    uint count[];
+} drawCounts;
+
+layout(set = 0, binding = 5) readonly buffer CapacityBuffer {
+    uint capacity[];
+} indirectCapacities;
+
+layout(set = 0, binding = 6) writeonly buffer IndirectDrawCommandBuffer {
+    DrawIndexedIndirectCommand commands[];
+} indirectBuffers[];
+
+// ------------------------------------------------------------------
+// Helper Functions
+// ------------------------------------------------------------------
+
+bool isVisible(vec4 sphere) {
+    // Simple sphere-frustum check
+    for (int i = 0; i < 6; i++) {
+        if (dot(cam.frustumPlanes[i], vec4(sphere.xyz, 1.0)) < -sphere.w) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool tryReserveCommandSlot(uint shaderIndex, out uint cmdIndex) {
+    cmdIndex = atomicAdd(drawCounts.count[shaderIndex], 1);
+    uint maxCommands = indirectCapacities.capacity[shaderIndex];
+    return cmdIndex < maxCommands;  
+}
+
+// ------------------------------------------------------------------
+// Main
+// ------------------------------------------------------------------
+
+void main() {
+    uint gID = gl_GlobalInvocationID.x;
+
+    // Boundary check
+    if (gID >= meshes.meshes.length()) {
+        return;
+    }
+
+    // 1. Fetch Object Data
+    Mesh mesh = meshes.meshes[gID];
+
+    // Check if this slot is empty/invalid
+    if (mesh.valid==0) {
+        return;
+    }
+    
+    //fetch pointers
+    MeshInfo meshInfo = meshInfos.meshInfos[mesh.meshInfoId];
+    Transform transform = transforms.transforms[mesh.transformId];
+
+    //Transform Bounding Sphere to World Space
+    vec3 worldCenter = (transform.model * vec4(meshInfo.boundingSphere.xyz, 1.0)).xyz;
+    vec4 scale = transform.scale;
+    float worldRadius = meshInfo.boundingSphere.w * max(max(abs(scale.x), abs(scale.y)), abs(scale.z));
+
+    //Frustum Cull with World Sphere
+    if (isVisible(vec4(worldCenter, worldRadius))) {
+
+        // 5. Build the Draw Command (shared by both paths)
+        DrawIndexedIndirectCommand cmd;
+        cmd.indexCount    = meshInfo.indexCount;
+        cmd.instanceCount = 1;             
+        cmd.firstIndex    = meshInfo.firstIndex;
+        cmd.vertexOffset  = meshInfo.vertexOffset;
+        cmd.firstInstance = gID;           // Pass global ID to Vertex Shader (gl_InstanceIndex)
+
+        uint shaderIndex = mesh.pipelineId; 
+        uint cmdIndex = 0;
+        if (!tryReserveCommandSlot(shaderIndex, cmdIndex)) {
+            return;
+        }
+
+        // 9. Write to the specific Indirect Buffer
+        // We use the nonuniform index here to select the correct buffer from the array.
+        indirectBuffers[nonuniformEXT(shaderIndex)].commands[cmdIndex] = cmd;
+    }
+}
