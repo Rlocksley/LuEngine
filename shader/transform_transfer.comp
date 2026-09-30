@@ -12,7 +12,11 @@ struct Transform{
 struct TransformInstance {
     Transform transform;
     uint id;
-    vec3 pad;
+    // Keep the std430 record at the same 192-byte stride as C++:
+    // Transform (176) + id (4) + three scalar padding words (12).
+    uint pad0;
+    uint pad1;
+    uint pad2;
 };
 
 // Layout-Konfiguration für die Ausführung (Workgroup-Größe)

@@ -5,6 +5,8 @@
 
 namespace Lu {
     namespace Component {
+        struct Static{}; // used for should be updated each frame or not information
+
         struct Transform {
             glm::vec3 position{0.0f, 0.0f, 0.0f};
             glm::quat rotation{0.0f, 0.0f, 0.0f, 1.0f}; // Identity quaternion

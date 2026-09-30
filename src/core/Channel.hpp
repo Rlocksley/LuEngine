@@ -14,6 +14,11 @@ namespace Lu{
             Component::Transform transform;
         };
 
+        struct UpdateTransform{
+            flecs::entity_t entity;            
+            Component::Transform transform;
+        };
+
         struct DestroyTransform{
             flecs::entity_t entity;            
         };

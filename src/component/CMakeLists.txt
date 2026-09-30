@@ -12,5 +12,5 @@ target_link_libraries(lca_component PUBLIC
     Vulkan::Vulkan  # The imported target for Vulkan
     glm::glm        # The imported target for GLM
     glfw            # The imported target for GLFW
-    lca_core
+    lu_core
 )

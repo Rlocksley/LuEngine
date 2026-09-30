@@ -2,15 +2,15 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Release lu_example1",
+      "name": "Release with debug info lu_example1",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/examples/Debug/lu_example1.exe",
+      "program": "${workspaceFolder}/build/examples/RelWithDebInfo/lu_example1.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
-      "preLaunchTask": "Build lu_example1 (Release)"
+      "preLaunchTask": "Build lu_example1 (Release with debug info)"
     },
     {
       "name": "Debug lu_example1",

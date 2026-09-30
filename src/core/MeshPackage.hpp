@@ -14,6 +14,7 @@
 #include "TransformPackage.hpp"
 #include "GeometryPackage.hpp"
 #include "PipelineConfig.hpp"
+#include <cstddef>
 
 namespace Lu{
     namespace Core{
@@ -69,6 +70,11 @@ namespace Lu{
         MeshInstance(const Mesh mesh, MeshId id) :
         mesh(mesh), id(id) {}
     };
+
+    static_assert(sizeof(Material) == 80);
+    static_assert(sizeof(Mesh) == 96);
+    static_assert(offsetof(MeshInstance, id) == 96);
+    static_assert(sizeof(MeshInstance) == 112);
 
     class MeshPackage{
         private:

@@ -22,7 +22,10 @@ struct Mesh {
 struct MeshInstance {
     Mesh mesh;
     uint id;
-    vec3 pad;
+    // Match C++ MeshInstance: Mesh (96) + id and padding (16).
+    uint pad0;
+    uint pad1;
+    uint pad2;
 };
 
 // Layout-Konfiguration für die Ausführung (Workgroup-Größe)

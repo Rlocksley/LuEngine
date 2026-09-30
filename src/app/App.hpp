@@ -6,6 +6,7 @@
 #include "flecs.h"
 #include "Vertex.hpp"
 #include "Renderer.hpp"
+#include "modul/TransformGpuModule.hpp"
 #include "PipelineConfig.hpp"
 #include "component/InputState.hpp"
 #include "Exit.hpp"
@@ -84,6 +85,8 @@ namespace Lu{
         }
 
         void run(){
+
+            Core::FramerateMonitor framerateMonitor;
             
             world->import<Module::Transform>();
             world->import<Module::TransformGpu>();
@@ -91,11 +94,20 @@ namespace Lu{
             world->import<Module::Material>();
             world->import<Module::InputState>();
 
+            #ifdef LU_DEBUG
+            // 1. Enable the embedded REST API server (runs on default port 27750)
+            world->set<flecs::Rest>({});
+
+             // 1. Optional: Import the statistics module to gather performance profiling
+            world->import<flecs::stats>(); 
+            #endif
+
+
             for(auto func : moduleFuncs){
                 func(*world);
             }
             moduleFuncs.clear();
-        
+
             // flecs ecs thread
             std::thread ecsThread([&](){
                 std::chrono::duration<double> targetFrameTime(1.0 / Core::MAX_FRAMES_PER_SECOND_ECS);
@@ -106,6 +118,7 @@ namespace Lu{
                     if(!world->progress()){
                         break;
                     }
+                    framerateMonitor.recordEcsFrame();
 
                     // Sleep for the remaining frame budget to cap at MAX_FRAMES_PER_SECOND_RENDERER.
                     auto frameEnd = std::chrono::high_resolution_clock::now();
@@ -121,7 +134,7 @@ namespace Lu{
             });
 
             //render thread
-            renderer->run();
+            renderer->run(framerateMonitor);
 
             ecsThread.join();
         }

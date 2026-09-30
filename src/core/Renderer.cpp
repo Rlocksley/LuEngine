@@ -23,18 +23,24 @@ namespace Lu{
         }
 
         Renderer::~Renderer() {
+            // run() may leave up to MAX_FRAMES_IN_FLIGHT submissions pending.
+            LU_CHECK_VULKAN(vkDeviceWaitIdle(vkDevice), "Renderer::~Renderer", "vkDeviceWaitIdle")
         }
 
-        void Renderer::run() {
+        void Renderer::run(FramerateMonitor& framerateMonitor) {
             std::chrono::duration<double> targetFrameTime(1.0 / MAX_FRAMES_PER_SECOND_RENDERER);
 
             while (Core::isRunning.load(std::memory_order_relaxed) && Core::updateCore()) {
                 auto frameStart = std::chrono::high_resolution_clock::now();
 
+                // Reuse the command buffer and frame-indexed resources only
+                // after this frame slot's previous submission has completed.
+                command[frameIndex].waitForFence();
                 Core::getSwapchainImageIndex(frameIndex);
                 processEcsRequests();
                 record();
                 submit();
+                framerateMonitor.recordRendererFrameAndPrint();
                 frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 
                 // Sleep for the remaining frame budget to cap at MAX_FRAMES_PER_SECOND_RENDERER.
@@ -94,6 +100,10 @@ namespace Lu{
                 );
             }
             
+            // Apply the latest dynamic transforms after lifecycle requests have
+            // established or removed entity-to-transform ID mappings.
+            transform.updateTransforms();
+
             //Writes the Dirty Elements to the InstanceBuffer
             transform.collectDirty(frameIndex);
             mesh.collectDirty(frameIndex);
@@ -150,7 +160,6 @@ namespace Lu{
 
             cmd.submitGraphics(frameIndex);
             cmd.presentGraphics();
-            cmd.waitForFence();
         }
 
 

@@ -22,7 +22,7 @@ struct MyLevelModul{
                         lookAt(glm::vec3(0,0,5.f), glm::vec3(0,0,0)),
                 .speed = 10.0f,
                 .rotationSpeed = 0.005f,
-                .fov = glm::radians(60.0f),
+                .fov = glm::radians(90.0f),
                 .nearClip = 0.1f,
                 .farClip = 1000.0f
             }
@@ -30,50 +30,71 @@ struct MyLevelModul{
         .add<Lu::Component::Transform>();
 
 
-        float rotationSpeed = 3.f;
+        float attractorSpeed = 1.0f;
 
-        world.system("CubeRotationSystem")
-            .with<MyRotatingCubeTag>()
-            .with<Lu::Component::Transform>()
-            .each([speed = rotationSpeed](
-                flecs::iter& it, 
-                size_t index) {
+        world.system<Lu::Component::Transform>("CubeRotationSystem")
+            .with<MyRotatingCubeTag>()    
+            .each([b = 0.208186f, speed = attractorSpeed](
 
-                Lu::Component::Transform rotation(
-                    glm::vec3(0, 0, 0),        // position 
-                    speed * it.delta_time(),   // angle 
-                    glm::vec3(1, 1, 1),        // axis 
-                    glm::vec3(1, 1, 1)         // scale
-                );
+                flecs::iter& it, size_t index, Lu::Component::Transform& transform) {
 
-                const auto& transform = it.entity(index).get<Lu::Component::Transform>();
+                auto f = [b](const glm::vec3& p) {
+                    return glm::vec3(
+                        std::sin(p.y) - b * p.x,
+                        std::sin(p.z) - b * p.y,
+                        std::sin(p.x) - b * p.z
+                    );
+                };
 
-                it.entity(index).set<Lu::Component::Transform>(rotation * transform);
+                // Clamp dt and split it into small steps so frame hitches can't destabilize it.
+                constexpr float maxStep = 0.05f;
+                constexpr int   maxSubsteps = 8;
+                const float dt = std::min(speed * it.delta_time(), maxStep * maxSubsteps);
+                const int   n  = std::clamp(static_cast<int>(std::ceil(dt / maxStep)), 1, maxSubsteps);
+                const float h  = dt / static_cast<float>(n);
+
+                // RK4 integration, using the transform position itself as the state.
+                glm::vec3 p = transform.position;
+                for (int i = 0; i < n; ++i) {
+                    const glm::vec3 k1 = f(p);
+                    const glm::vec3 k2 = f(p + 0.5f * h * k1);
+                    const glm::vec3 k3 = f(p + 0.5f * h * k2);
+                    const glm::vec3 k4 = f(p + h * k3);
+                    p += (h / 6.0f) * (k1 + 2.0f * k2 + 2.0f * k3 + k4);
+                }
+
+                transform.position = p;
             });
 
-        auto cube = world.entity("MyCube")
-        .add<MyRotatingCubeTag>()
-        .set<Lu::Component::Transform>({
-            glm::vec3(0,0,0),   //position
-            0,                  //angle
-            glm::vec3(0,1,0),   //axis
-            glm::vec3(1,1,1)})  //scale
-        .add<Lu::Component::TransformGpu>();// mirrors Transform on Gpu
+        uint32_t numberCubes = 50000;
+        float stepSize = 0.1f;
 
-        world.entity("MyCubeMesh")
-        .child_of(cube)
-        .set(Lu::Component::Mesh{
-            //MyCube entity, registered on App::registerShape
-            .mesh = world.lookup("Mesh::MyCube"), 
-            //Simple Mesh Pipe entity, registered on App::registerMeshPipe
-            .pipeline = world.lookup("MeshPipe::Simple") 
-        })
-        .set(Lu::Component::Material{
-            .albedo = glm::vec4(1,1,1,1),
-            .ambient = glm::vec4(0.1,0.1,0.1,1),
-            .roughness = 0.5,
-            .metallic = 0.5,
-        });
+        init_random();
+        for(uint32_t i = 0; i < numberCubes; i++){
+            auto cube = world.entity(("MyCube_" + std::to_string(i)).c_str())
+            .add<MyRotatingCubeTag>()
+            .set<Lu::Component::Transform>({
+                (glm::vec3((i%(int)sqrt(numberCubes)),(i/sqrt(numberCubes)),random(0,sqrt(numberCubes))) - glm::vec3(sqrt(numberCubes)/2))*stepSize,   //position
+                0,                  //angle
+                glm::vec3(0,1,0),   //axis
+                glm::vec3(0.01)})  //scale
+            .add<Lu::Component::TransformGpu>();// mirrors Transform on Gpu
+
+            world.entity(("MyCubeMesh_" + std::to_string(i)).c_str())
+            .set(flecs::Parent{cube})
+            .set(Lu::Component::Mesh{
+                //MyCube entity, registered on App::registerShape
+                .mesh = world.lookup("Mesh::MyCube"), 
+                //Simple Mesh Pipe entity, registered on App::registerMeshPipe
+                .pipeline = world.lookup("MeshPipe::Simple") 
+            })
+            .set(Lu::Component::Material{
+                .albedo = glm::vec4(random(0,10),random(0,10),random(0,10),random(0,1)),
+                .ambient = glm::vec4(0.1,0.1,0.1,1),
+                .roughness = random(0,1),
+                .metallic = random(0,1),
+            });
+        }
     }
 };
 
@@ -87,7 +108,7 @@ int main(){
     .registerMeshPipe(
         Lu::GraphicsPipelineConfig{
             .name = "MeshPipe::Simple",
-            .capacity = 1000,
+            .capacity = 1000000,
             .vertexShader = "shader/mesh_basic.vert.spv",
             .fragmentShader = "shader/mesh_basic.frag.spv"
         }

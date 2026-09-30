@@ -7,6 +7,7 @@
 #include "TransformPackage.hpp"
 #include "GeometryPackage.hpp"
 #include "MeshPackage.hpp"
+#include "FramerateMonitor.hpp"
 
 namespace Lu{
     namespace Core{
@@ -15,7 +16,7 @@ namespace Lu{
         public:
             Renderer();
             ~Renderer();
-            void run();
+            void run(FramerateMonitor& framerateMonitor);
 
             using MeshPipeEntity = flecs::entity_t;
             void createMeshPipe(const MeshPipeEntity entity, const GraphicsPipelineConfig& config);

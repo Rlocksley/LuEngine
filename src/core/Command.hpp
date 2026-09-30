@@ -47,7 +47,8 @@ namespace Lu
                 "createCommand",
                 "vkAllocateCommandBuffers")
 
-                vkFence = createFence(0);
+                // A frame slot waits on its fence before its first submission.
+                vkFence = createFence(VK_FENCE_CREATE_SIGNALED_BIT);
             }
 
             ~Command(){
@@ -104,6 +105,7 @@ namespace Lu
                 submitInfo.signalSemaphoreCount = 0;
                 submitInfo.pSignalSemaphores = nullptr;
 
+                resetFence();
                 LU_CHECK_VULKAN
                 (vkQueueSubmit
                 (Lu::Core::vkQueue,
@@ -131,6 +133,8 @@ namespace Lu
                 submitInfo.signalSemaphoreCount = 1;
                 submitInfo.pSignalSemaphores = &swapchain.renderFinishedSemaphores[swapchain.imageIndex];
                 
+                // The renderer waited for this frame slot before recording it.
+                resetFence();
                 LU_CHECK_VULKAN
                 (vkQueueSubmit
                 (vkQueue,
@@ -171,11 +175,15 @@ namespace Lu
                 "Command::waitForFence",
                 "vkWaitForFences")
 
+            }
+
+            void resetFence() const
+            {
                 LU_CHECK_VULKAN
                 (vkResetFences
                 (vkDevice,
                 1, &vkFence),
-                "Command::waitForFence",
+                "Command::resetFence",
                 "vkResetFences")
             }
         };

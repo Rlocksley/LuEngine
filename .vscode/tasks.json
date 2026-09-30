@@ -17,7 +17,7 @@
       "group": "build"
     },
     {
-      "label": "Build lu_example1 (Release)",
+      "label": "Build lu_example1 (Release with debug info)",
       "type": "process",
       "command": "cmake",
       "args": [
