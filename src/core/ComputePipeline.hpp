@@ -11,7 +11,8 @@ namespace Lu {
             ComputePipeline() = default;
             virtual ~ComputePipeline(){}
 
-            void create(const VkPipelineLayout& pipelineLayout, const ComputePipelineConfig& config);
+            void create(const VkPipelineLayout& pipelineLayout, const ComputePipelineConfig& config,
+                        bool indirectBindable = false);
         };
     }
 }

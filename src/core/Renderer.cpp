@@ -19,7 +19,8 @@ namespace Lu{
                 MAX_INDICES_PER_MESH,
                 MAX_MESH_INFOS
             ),
-            mesh(camera, transform, meshGeometry) {
+            mesh(camera, transform, meshGeometry),
+            multiMesh(camera, transform, meshGeometry) {
         }
 
         Renderer::~Renderer() {
@@ -36,12 +37,23 @@ namespace Lu{
                 // Reuse the command buffer and frame-indexed resources only
                 // after this frame slot's previous submission has completed.
                 command[frameIndex].waitForFence();
-                Core::getSwapchainImageIndex(frameIndex);
+                const VkResult acquireResult = Core::getSwapchainImageIndex(frameIndex);
+                if(acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    Core::recreateSwapchain();
+                    continue;
+                }
                 processEcsRequests();
                 record();
-                submit();
+                const VkResult presentResult = submit();
                 framerateMonitor.recordRendererFrameAndPrint();
                 frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
+
+                if(acquireResult == VK_SUBOPTIMAL_KHR || presentResult == VK_SUBOPTIMAL_KHR ||
+                    presentResult == VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    Core::recreateSwapchain();
+                }
 
                 // Sleep for the remaining frame budget to cap at MAX_FRAMES_PER_SECOND_RENDERER.
                 auto frameEnd = std::chrono::high_resolution_clock::now();
@@ -64,10 +76,18 @@ namespace Lu{
             meshGeometry.addGeometry(entity, vb, ib);
         }
 
+        void Renderer::createMultiMeshPipe(const flecs::entity_t entity, const GraphicsPipelineConfig& config){
+            multiMesh.createGraphicsPipeline(entity, config);
+        }
+
+        void Renderer::createMultiMeshComputePipe(const flecs::entity_t entity, const ComputePipelineConfig& config){
+            multiMesh.createComputePipeline(entity, config);
+        }
+
         
         void Renderer::processEcsRequests(){
-            const auto vecEcsRequests = GetChannel().drain(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME);
-            for(const auto& request : vecEcsRequests){
+            auto vecEcsRequests = GetChannel().drain(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME);
+            for(auto& request : vecEcsRequests){
                 std::visit(variant_match{
                     
                         [&](const EcsRequest::CreateTransform& req){
@@ -90,6 +110,14 @@ namespace Lu{
                         [&](const EcsRequest::DestroyMesh& req){
                             mesh.destroyMesh(req.entity);    
                         },
+
+                        [&](EcsRequest::CreateMultiMesh& req){
+                            pendingMultiMeshCreates.push_back(std::move(req));
+                        },
+
+                        [&](const EcsRequest::DestroyMultiMesh& req){
+                            multiMesh.destroyMultiMesh(req.entity);
+                        },
                         
                         [&](const EcsRequest::UpdateCamera& req){
                             camera.update(req);
@@ -97,6 +125,21 @@ namespace Lu{
 
                     }, 
                     request
+                );
+            }
+
+            if(!pendingMultiMeshCreates.empty()){
+                EcsRequest::CreateMultiMesh request = std::move(pendingMultiMeshCreates.front());
+                pendingMultiMeshCreates.pop_front();
+                multiMesh.createMultiMesh(
+                    request.entity,
+                    request.mesh,
+                    request.computePipe,
+                    request.pipe,
+                    transform.getTransformId(request.parent),
+                    meshGeometry,
+                    request.instances,
+                    request.cullSphere
                 );
             }
             
@@ -107,6 +150,7 @@ namespace Lu{
             //Writes the Dirty Elements to the InstanceBuffer
             transform.collectDirty(frameIndex);
             mesh.collectDirty(frameIndex);
+            multiMesh.collectDirty(frameIndex);
         }
 
         void Renderer::record(){
@@ -121,6 +165,7 @@ namespace Lu{
             camera.copy(frameIndex, cmd);
             transform.copy(frameIndex, cmd);
             mesh.copy(frameIndex, cmd);
+            multiMesh.copy(frameIndex, cmd);
             mesh.zeroOut(frameIndex, cmd);
 
             //Pipeline Barrier
@@ -132,12 +177,18 @@ namespace Lu{
             //via compute shader
             transform.transfer(frameIndex, cmd);
             mesh.transfer(frameIndex, cmd);
+            multiMesh.transfer(frameIndex, cmd);
 
             //Pipeline Barrier
             transferBarrier(cmd);
 
             //Mesh Culling
             mesh.cull(frameIndex, cmd);
+            multiMesh.cull(frameIndex, cmd);
+
+            //Execute generated commands after culling has written their indirect records.
+            cullBarrier(cmd);
+            multiMesh.executeCompute(frameIndex, cmd);
 
             //Pipeline Barrier
             cullBarrier(cmd);
@@ -147,6 +198,7 @@ namespace Lu{
 
             //Indirect Draws of all MeshPipelines
             mesh.draw(frameIndex, meshGeometry, cmd);
+            multiMesh.draw(frameIndex, meshGeometry, cmd);
 
             //end dynamic rendering
             endRendering(cmd);
@@ -155,11 +207,11 @@ namespace Lu{
             cmd.end();
         }
 
-        void Renderer::submit(){
+        VkResult Renderer::submit(){
             const auto& cmd = command[frameIndex];
 
             cmd.submitGraphics(frameIndex);
-            cmd.presentGraphics();
+            return cmd.presentGraphics();
         }
 
 
@@ -309,9 +361,13 @@ namespace Lu{
             recordBarrier(
                 cmd.vkCommandBuffer,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                    VK_PIPELINE_STAGE_COMMAND_PREPROCESS_BIT_EXT,
                 VK_ACCESS_SHADER_WRITE_BIT,
-                VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_READ_BIT
+                VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
+                    VK_ACCESS_SHADER_READ_BIT |
+                    VK_ACCESS_COMMAND_PREPROCESS_READ_BIT_EXT
             );
         }
 

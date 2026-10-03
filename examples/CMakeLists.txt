@@ -26,3 +26,15 @@ target_link_libraries(lu_example1 PRIVATE
     lu_app
     flecs::flecs
 )
+
+add_executable(lu_example4 main4.cpp)
+target_include_directories(lu_example4 PUBLIC ../src/core ../src/shape ../src/app)
+target_link_libraries(lu_example4 PRIVATE
+    Vulkan::Vulkan
+    glm::glm
+    glfw
+    lu_core
+    lu_shape
+    lu_app
+    flecs::flecs
+)

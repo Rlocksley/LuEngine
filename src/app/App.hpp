@@ -7,6 +7,7 @@
 #include "Vertex.hpp"
 #include "Renderer.hpp"
 #include "modul/TransformGpuModule.hpp"
+#include "modul/MultiMeshGpuModule.hpp"
 #include "PipelineConfig.hpp"
 #include "component/InputState.hpp"
 #include "Exit.hpp"
@@ -26,12 +27,14 @@ namespace Lu{
 
     public:
         App(const std::string& windowTitle, 
-            const uint32_t windowWidth, const uint32_t windowHeight,
+            bool fullscreen = false,
+            const uint32_t windowWidth = 1000, const uint32_t windowHeight = 700,
             const VkSampleCountFlagBits vkSampleCountFlagBits = VK_SAMPLE_COUNT_4_BIT
         ) {
             Core::windowTitle = windowTitle;
             Core::windowWidth = windowWidth;
             Core::windowHeight = windowHeight;
+            Core::fullscreen = fullscreen;
             Core::vkSampleCountFlagBits = vkSampleCountFlagBits; 
             Core::createCore();
 
@@ -52,6 +55,20 @@ namespace Lu{
             
             renderer->createMeshPipe(world->entity(config.name.c_str()).id(), config);
 
+            return *this;
+        }
+
+        App& registerMultiMeshPipe(const GraphicsPipelineConfig& config){
+            LU_ASSERT(config.name.size() > 0, "App", "registerMultiMeshPipe", "GraphicsPipelineConfig.name must be size bigger 0");
+            LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerMultiMeshPipe", "Entity with name: " + config.name + " already exists");
+            renderer->createMultiMeshPipe(world->entity(config.name.c_str()).id(), config);
+            return *this;
+        }
+
+        App& registerMultiMeshComputePipe(const ComputePipelineConfig& config){
+            LU_ASSERT(config.name.size() > 0, "App", "registerMultiMeshComputePipe", "ComputePipelineConfig.name must be size bigger 0");
+            LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerMultiMeshComputePipe", "Entity with name: " + config.name + " already exists");
+            renderer->createMultiMeshComputePipe(world->entity(config.name.c_str()).id(), config);
             return *this;
         }
 
@@ -91,6 +108,7 @@ namespace Lu{
             world->import<Module::Transform>();
             world->import<Module::TransformGpu>();
             world->import<Module::Mesh>();
+            world->import<Module::MultiMeshGpu>();
             world->import<Module::Material>();
             world->import<Module::InputState>();
 

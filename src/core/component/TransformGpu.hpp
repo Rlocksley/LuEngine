@@ -6,6 +6,9 @@
 namespace Lu{
     namespace Component{
         struct TransformGpu{};
+
+        struct TransformGpuDirty{};
+
     }
 
 

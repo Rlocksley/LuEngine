@@ -13,21 +13,30 @@ namespace Module {
                 world.component<Component::TransformGpu>();
 
                 world.observer<const Component::Transform>()
-                    .with<Component::TransformGpu>().filter()
-                    .event(flecs::OnAdd)
-                    .each([](flecs::entity entity, const Component::Transform& transform){
-                        GetChannel().send(EcsRequest::CreateTransform{entity.id(), transform});
-                    });
-
-
-                world.observer()
-                    .with<Component::Transform>().filter()
                     .with<Component::TransformGpu>()
                     .event(flecs::OnAdd)
-                    .each([](flecs::entity entity){
-                        const auto& transform = entity.get<Component::Transform>();
-                        GetChannel().send(EcsRequest::CreateTransform{entity.id(), transform});
+                    .event(flecs::OnSet)
+                    .each([](flecs::entity entity, const Component::Transform& transform){
+                        entity.add<Component::TransformGpuDirty>();
                     });
+
+                world.system<Component::Transform>("EcsRequest::CreateTransform System")
+                .with<Component::TransformGpuDirty>()
+                .run([](flecs::iter it){
+                    std::vector<EcsRequest::EcsRequest> transformBuffer;
+                    
+                    while (it.next()) {
+                        auto transforms = it.field<const Component::Transform>(0);
+                        for (int i = 0; i < it.count(); ++i) {
+                            auto entity = it.entity(i);
+                            transformBuffer.push_back(EcsRequest::CreateTransform{ entity, transforms[i]});
+                            entity.remove<Component::TransformGpuDirty>();
+                        }
+                    }
+
+                    GetChannel().send(transformBuffer);
+                });
+            
 
 
                 world.observer<const Component::Transform>()
@@ -36,6 +45,7 @@ namespace Module {
                     .each([](flecs::entity entity, const Component::Transform& transform){
                         GetChannel().send(EcsRequest::DestroyTransform{entity.id()});
                     });
+
 
                 world.system<const Component::Transform>()
                 .with<Component::TransformGpu>()

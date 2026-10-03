@@ -1,0 +1,154 @@
+#version 460
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_nonuniform_qualifier : require
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+struct Transform {
+    mat4 model;
+    mat4 normal;
+    vec4 scale;
+    vec4 rotation;
+    vec4 position;
+};
+
+struct Material {
+    ivec4 texturesIds;
+    vec4 albedo;
+    vec4 ambient;
+    vec4 emission;
+    float roughness;
+    float metallic;
+    uint pad0;
+    uint pad1;
+};
+
+struct MultiMeshTransform {
+    Material material;
+    Transform transform;
+};
+
+struct MultiMesh {
+    uint transformId;
+    uint computePipeId;
+    uint pipelineId;
+    uint meshInfoId;
+    uint size;
+    uint valid;
+    uint _pad0;
+    uint _pad1;
+    uint64_t transformBufferAddress;
+    uint _pad2;
+    uint _pad3;
+    vec4 cullSphere;
+};
+
+struct MultiMeshInstance {
+    MultiMesh mesh;
+    uint id;
+    uint begin;
+    uint end;
+    uint _pad;
+};
+
+struct IndirectDispatch {
+    uint multiMeshId;
+    uint transformBufferLength;
+    float deltaTime;
+    uint dispatchX;
+    uint dispatchY;
+    uint dispatchZ;
+};
+
+struct DrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int vertexOffset;
+    uint firstInstance;
+};
+
+struct GeometryInfo {
+    uint indexCount;
+    uint firstIndex;
+    uint vertexCount;
+    int vertexOffset;
+    vec4 boundingSphere;
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) writeonly buffer MultiMeshTransformOutput {
+    MultiMeshTransform values[];
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer MultiMeshInstanceBuffer {
+    MultiMeshInstance values[];
+} instances;
+
+layout(set = 0, binding = 1, std430) readonly buffer TransformUploadBuffer {
+    MultiMeshTransform values[];
+} transformUploads;
+
+layout(set = 0, binding = 2, std430) buffer MultiMeshBuffer {
+    MultiMesh values[];
+} multiMeshes;
+
+layout(set = 0, binding = 3, std430) buffer DispatchBuffer {
+    IndirectDispatch commands[];
+} dispatchBuffers[];
+
+layout(set = 0, binding = 4, std430) buffer DrawBuffer {
+    DrawIndexedIndirectCommand commands[];
+} drawBuffers[];
+
+layout(set = 0, binding = 5, std430) readonly buffer GeometryInfoBuffer {
+    GeometryInfo values[];
+} geometryInfos;
+
+layout(push_constant) uniform TransferPushConstants {
+    uint instanceCount;
+    uint transformCount;
+    float deltaTime;
+} pc;
+
+void main() {
+    uint instanceIndex = gl_WorkGroupID.y;
+    if (instanceIndex >= pc.instanceCount) {
+        return;
+    }
+
+    MultiMeshInstance instance = instances.values[instanceIndex];
+    uint id = instance.id;
+    MultiMesh mesh = instance.mesh;
+    uint transformCount = instance.end - instance.begin;
+    uint transformIndex = gl_GlobalInvocationID.x;
+
+    if (mesh.valid != 0u && transformIndex < transformCount &&
+        instance.begin + transformIndex < pc.transformCount) {
+        MultiMeshTransformOutput destination =
+            MultiMeshTransformOutput(mesh.transformBufferAddress);
+        destination.values[transformIndex] =
+            transformUploads.values[instance.begin + transformIndex];
+    }
+
+    if (gl_GlobalInvocationID.x == 0u) {
+        MultiMesh previous = multiMeshes.values[id];
+        if (previous.valid != 0u) {
+            dispatchBuffers[nonuniformEXT(previous.computePipeId)].commands[id] =
+                IndirectDispatch(id, 0u, pc.deltaTime, 0u, 0u, 0u);
+            drawBuffers[nonuniformEXT(previous.pipelineId)].commands[id].instanceCount = 0u;
+        }
+
+        if (mesh.valid != 0u) {
+            mesh.size = transformCount;
+            GeometryInfo geometry = geometryInfos.values[mesh.meshInfoId];
+            dispatchBuffers[nonuniformEXT(mesh.computePipeId)].commands[id] =
+                IndirectDispatch(id, transformCount, pc.deltaTime, transformCount, 1u, 1u);
+            drawBuffers[nonuniformEXT(mesh.pipelineId)].commands[id] =
+                DrawIndexedIndirectCommand(geometry.indexCount, transformCount,
+                    geometry.firstIndex, geometry.vertexOffset, 0u);
+        }
+
+        multiMeshes.values[id] = mesh;
+    }
+}

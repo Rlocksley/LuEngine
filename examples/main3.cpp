@@ -75,8 +75,8 @@ struct MyLevelModul{
             .add<MyRotatingCubeTag>()
             .set<Lu::Component::Transform>({
                 (glm::vec3((i%(int)sqrt(numberCubes)),(i/sqrt(numberCubes)),random(0,sqrt(numberCubes))) - glm::vec3(sqrt(numberCubes)/2))*stepSize,   //position
-                0,                  //angle
-                glm::vec3(0,1,0),   //axis
+                random(-3.14f,3.14f),                  //angle
+                glm::normalize(glm::vec3(random(0,1),random(0,1),random(0,1))),   //axis
                 glm::vec3(0.01)})  //scale
             .add<Lu::Component::TransformGpu>();// mirrors Transform on Gpu
 
@@ -102,8 +102,7 @@ struct MyLevelModul{
 int main(){
     Lu::App(
         "LuEngine Test-01",  //window title
-        1200,                //window width
-        700                  //window height
+        true                 //fullscreen,
     )
     .registerMeshPipe(
         Lu::GraphicsPipelineConfig{

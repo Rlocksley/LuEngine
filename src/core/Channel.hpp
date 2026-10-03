@@ -4,6 +4,7 @@
 #include "flecs.h"
 #include "component/Transform.hpp"
 #include "component/Material.hpp"
+#include "component/MultiMesh.hpp"
 #include "CameraData.hpp"
 
 namespace Lu{
@@ -36,11 +37,25 @@ namespace Lu{
             flecs::entity_t entity;            
         };
 
+        struct CreateMultiMesh{
+            flecs::entity_t parent;
+            flecs::entity_t entity;            
+            flecs::entity_t mesh;            
+            flecs::entity_t computePipe;
+            flecs::entity_t pipe;
+            glm::vec4 cullSphere;
+            std::vector<Component::MultiMeshInstance> instances;
+        };
+
+        struct DestroyMultiMesh{
+            flecs::entity_t entity;            
+        };
+
         struct UpdateCamera{
             CameraData cameraData;
         };
 
-        using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMesh, DestroyMesh, UpdateCamera>;
+        using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, UpdateCamera>;
 
     }
 
@@ -58,6 +73,20 @@ namespace Lu{
             void send(EcsRequest::EcsRequest&& request){
                 std::lock_guard<std::mutex> lock(queueMutex);
                 requestQueue.push_back(std::move(request));
+            }
+
+            void send(const std::vector<EcsRequest::EcsRequest>& requests){
+                std::lock_guard<std::mutex> lock(queueMutex);
+                requestQueue.reserve(requestQueue.size() + requests.size());
+                requestQueue.insert(requestQueue.end(), requests.begin(), requests.end());
+            }
+
+            void send(std::vector<EcsRequest::EcsRequest>&& requests){
+                std::lock_guard<std::mutex> lock(queueMutex);
+                requestQueue.reserve(requestQueue.size() + requests.size());
+                requestQueue.insert(requestQueue.end(),
+                    std::make_move_iterator(requests.begin()),
+                    std::make_move_iterator(requests.end()));
             }
 
             std::vector<EcsRequest::EcsRequest> drain(uint32_t maxRequests){

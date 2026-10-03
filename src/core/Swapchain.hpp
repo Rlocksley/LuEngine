@@ -21,6 +21,6 @@ namespace Lu
 
         void createSwapchain();
         void destroySwapchain();
-        void getSwapchainImageIndex(uint32_t frameIndex);
+        VkResult getSwapchainImageIndex(uint32_t frameIndex);
     }
 }

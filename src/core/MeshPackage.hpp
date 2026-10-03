@@ -8,8 +8,7 @@
 #include "GraphicsPipeline.hpp"
 #include "flecs.h"
 #include "Vertex.hpp"
-#include "component/Mesh.hpp"
-#include "component/Material.hpp"
+#include "instance/MeshInstance.hpp"
 #include "CameraPackage.hpp"
 #include "TransformPackage.hpp"
 #include "GeometryPackage.hpp"
@@ -18,63 +17,6 @@
 
 namespace Lu{
     namespace Core{
-
-    struct Material{
-        glm::ivec4 texturesIds{-1, -1, -1, -1}; // x = albedo, y = normal, z = roughness, w = metallic
-        glm::vec4 albedo{0.f, 0.f, 0.f, 1.f};
-        glm::vec4 ambient{0.f, 0.f, 0.f, 1.f};
-        glm::vec4 emission{0.f, 0.f, 0.f, 1.f};
-        float roughness{0.5f};
-        float metallic{0.0f};
-        glm::vec2 _pad{0.f, 0.f};
-
-        Material() = default;
-
-        Material(const Component::Material& comp):
-            texturesIds(comp.texturesIds),
-            albedo(comp.albedo),
-            ambient(comp.ambient),
-            emission(comp.emission),
-            roughness(comp.roughness),
-            metallic(comp.metallic){}
-    };
-
-    struct Mesh {
-        Material material{};
-        uint32_t transformId{0};   
-        uint32_t pipelineId{0};       
-        uint32_t meshInfoId{0};
-        uint32_t valid{0};
-
-        Mesh() = default;
-
-        Mesh(const Component::Material& material, const uint32_t transformId, 
-             const uint32_t pipelineId, const uint32_t meshInfoId):
-            material(material),
-            transformId(transformId),
-            pipelineId(pipelineId),
-            meshInfoId(meshInfoId),
-            valid(1)
-            {}
-    };
-
-    using MeshId = uint32_t;
-
-    struct MeshInstance {
-        Mesh mesh{};
-        MeshId id{0};
-        glm::vec3 _pad{0.f, 0.f, 0.f};
-
-        MeshInstance() = default;
-
-        MeshInstance(const Mesh mesh, MeshId id) :
-        mesh(mesh), id(id) {}
-    };
-
-    static_assert(sizeof(Material) == 80);
-    static_assert(sizeof(Mesh) == 96);
-    static_assert(offsetof(MeshInstance, id) == 96);
-    static_assert(sizeof(MeshInstance) == 112);
 
     class MeshPackage{
         private:

@@ -31,5 +31,6 @@ namespace Lu
         void createCore();
         void destroyCore();
         bool updateCore();
+        void recreateSwapchain();
     }
 }

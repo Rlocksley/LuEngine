@@ -33,6 +33,7 @@ namespace Lu{
             BufferGpuIndexed<GeometryInfo> infoBuffer;
             using GeometryEntity = flecs::entity_t;
             std::unordered_map<GeometryEntity, GeometryInfoId> entityToGeometryInfoId;
+            std::vector<GeometryInfo> geometryInfos;
 
             Command command;
             
@@ -103,6 +104,9 @@ namespace Lu{
                         command.submit();
                         command.waitForFence();
 
+                        if(infoId >= geometryInfos.size()) geometryInfos.resize(std::size_t{infoId} + 1);
+                        geometryInfos[infoId] = info;
+
                         entityToGeometryInfoId.emplace(entity, infoId);
                 }
 
@@ -110,6 +114,11 @@ namespace Lu{
                     auto it = entityToGeometryInfoId.find(entity);
                     LU_ASSERT(it != entityToGeometryInfoId.end(), "GeometryPackage", "getGeometryInfoId", "No GeometryInfoId for given GeometryEntity");
                     return it->second;
+                }
+
+                const GeometryInfo& getGeometryInfo(GeometryInfoId id) const {
+                    LU_ASSERT(id < geometryInfos.size(), "GeometryPackage", "getGeometryInfo", "GeometryInfoId is out of range.")
+                    return geometryInfos[id];
                 }
 
                 const BufferGpuIndexed<GeometryInfo>& getGeometryInfoBuffer() const { return infoBuffer; }

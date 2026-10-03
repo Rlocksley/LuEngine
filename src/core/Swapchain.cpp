@@ -142,18 +142,21 @@ namespace Lu
             nullptr);
         }
 
-        void getSwapchainImageIndex(uint32_t frameIndex)
+        VkResult getSwapchainImageIndex(uint32_t frameIndex)
         {
-            LU_CHECK_VULKAN
-            (vkAcquireNextImageKHR
+            const VkResult result = vkAcquireNextImageKHR
             (vkDevice,
             swapchain.vkSwapchainKHR,
             UINT64_MAX,
             swapchain.imageAvailableSemaphores[frameIndex],
             nullptr,
-            &swapchain.imageIndex),
-            "getSwapchainImageIndex",
-            "vkAcquireNextImageKHR")
+            &swapchain.imageIndex);
+
+            if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR)
+            {
+                LU_CHECK_VULKAN(result, "getSwapchainImageIndex", "vkAcquireNextImageKHR")
+            }
+            return result;
         }
 
     }

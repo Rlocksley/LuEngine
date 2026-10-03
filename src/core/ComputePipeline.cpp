@@ -6,7 +6,8 @@
 namespace Lu {
 	namespace Core {
 
-		void ComputePipeline::create(const VkPipelineLayout& pipelineLayout, const ComputePipelineConfig& config){
+		void ComputePipeline::create(const VkPipelineLayout& pipelineLayout, const ComputePipelineConfig& config,
+								bool indirectBindable){
 
 			PipelineBase::destroy();
 
@@ -23,6 +24,12 @@ namespace Lu {
 
 			VkComputePipelineCreateInfo computePipelineCreateInfo{};
 			computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+			VkPipelineCreateFlags2CreateInfo flags2Info{};
+			if(indirectBindable){
+				flags2Info.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO;
+				flags2Info.flags = VK_PIPELINE_CREATE_2_INDIRECT_BINDABLE_BIT_EXT;
+				computePipelineCreateInfo.pNext = &flags2Info;
+			}
 			computePipelineCreateInfo.stage = shaderStage;
 			computePipelineCreateInfo.layout = pipelineLayout;
 			computePipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;

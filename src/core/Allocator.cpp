@@ -17,8 +17,8 @@ namespace Lu
             createInfo.instance = vkInstance;
             createInfo.physicalDevice = vkPhysicalDevice;
             createInfo.device = vkDevice;
-            //createInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-            createInfo.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
+            createInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT |
+                               VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
             LU_CHECK_VULKAN
             (vmaCreateAllocator
             (&createInfo,&vmaAllocator),

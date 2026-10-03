@@ -76,7 +76,7 @@
 }
 
 #define init_random() srand(static_cast<unsigned int>(time(0)))
-#define random(lower, upper) ((static_cast<float>(rand())/static_cast<float>(RAND_MAX))*((upper)-(lower)) + (lower))
+#define random(lower, upper) (static_cast<float>((static_cast<float>(rand())/static_cast<float>(RAND_MAX))*((upper)-(lower)) + (lower)))
 
 
 template<class... Ts> struct variant_match : Ts... { using Ts::operator()...; };

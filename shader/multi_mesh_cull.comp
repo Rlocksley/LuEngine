@@ -1,0 +1,115 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+struct Transform {
+    mat4 model;
+    mat4 normal;
+    vec4 scale;
+    vec4 rotation;
+    vec4 position;
+};
+
+struct MultiMesh {
+    uint transformId;
+    uint computePipeId;
+    uint pipelineId;
+    uint meshInfoId;
+    uint size;
+    uint valid;
+    uint _pad0;
+    uint _pad1;
+    uint64_t transformBufferAddress;
+    uint _pad2;
+    uint _pad3;
+    vec4 cullSphere;
+};
+
+struct IndirectDispatch {
+    uint multiMeshId;
+    uint transformBufferLength;
+    float deltaTime;
+    uint dispatchX;
+    uint dispatchY;
+    uint dispatchZ;
+};
+
+struct DrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int vertexOffset;
+    uint firstInstance;
+};
+
+layout(set = 0, binding = 0) uniform CameraData {
+    vec4 frustumPlanes[6];
+    mat4 projection;
+    mat4 view;
+    mat4 viewProjection;
+    mat4 inverseProjection;
+    vec4 camPos;
+    vec4 camDir;
+    vec2 screenSize;
+    float nearClip;
+    float farClip;
+} camera;
+
+layout(set = 0, binding = 1, std430) readonly buffer ParentTransformBuffer {
+    Transform values[];
+} parentTransforms;
+
+layout(set = 0, binding = 2, std430) readonly buffer MultiMeshBuffer {
+    MultiMesh values[];
+} multiMeshes;
+
+layout(set = 0, binding = 3, std430) buffer DispatchBuffer {
+    IndirectDispatch commands[];
+} dispatchBuffers[];
+
+layout(set = 0, binding = 4, std430) buffer DrawBuffer {
+    DrawIndexedIndirectCommand commands[];
+} drawBuffers[];
+
+layout(push_constant) uniform CullPushConstants {
+    uint multiMeshCount;
+    float deltaTime;
+} pc;
+
+bool isVisible(vec4 sphere) {
+    for (uint planeIndex = 0u; planeIndex < 6u; ++planeIndex) {
+        if (dot(camera.frustumPlanes[planeIndex], vec4(sphere.xyz, 1.0)) < -sphere.w) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    if (id >= pc.multiMeshCount) {
+        return;
+    }
+
+    MultiMesh mesh = multiMeshes.values[id];
+    if (mesh.valid == 0u) {
+        return;
+    }
+
+    Transform parent = parentTransforms.values[mesh.transformId];
+    vec3 worldCenter = (parent.model * vec4(mesh.cullSphere.xyz, 1.0)).xyz;
+    float maxScale = max(max(abs(parent.scale.x), abs(parent.scale.y)), abs(parent.scale.z));
+    bool visible = mesh.size > 0u && isVisible(vec4(worldCenter, mesh.cullSphere.w * maxScale));
+
+    if (visible) {
+        dispatchBuffers[nonuniformEXT(mesh.computePipeId)].commands[id] =
+            IndirectDispatch(id, mesh.size, pc.deltaTime, mesh.size, 1u, 1u);
+        drawBuffers[nonuniformEXT(mesh.pipelineId)].commands[id].instanceCount = mesh.size;
+    } else {
+        dispatchBuffers[nonuniformEXT(mesh.computePipeId)].commands[id] =
+            IndirectDispatch(id, mesh.size, pc.deltaTime, 0u, 0u, 0u);
+        drawBuffers[nonuniformEXT(mesh.pipelineId)].commands[id].instanceCount = 0u;
+    }
+}

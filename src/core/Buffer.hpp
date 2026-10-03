@@ -291,6 +291,100 @@ namespace Lu
         };
 
         template<typename T>
+        class BufferGpuAddress final : public IBufferResource {
+        public:
+            explicit BufferGpuAddress(uint32_t size, VkBufferUsageFlags usage,
+                                      const void* pNext = nullptr, bool hostVisible = false)
+                : size(size), usage(usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
+                  hostVisible(hostVisible) {
+                for(uint32_t frameIndex = 0; frameIndex < MAX_FRAMES_IN_FLIGHT; ++frameIndex){
+                    VkBufferCreateInfo createInfo{};
+                    createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+                    createInfo.pNext = pNext;
+                    createInfo.size = sizeof(T) * size;
+                    createInfo.usage = this->usage;
+                    createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+                    VmaAllocationCreateInfo allocationInfo{};
+                    allocationInfo.usage = hostVisible
+                        ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST
+                        : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+                    if(hostVisible){
+                        allocationInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                                               VMA_ALLOCATION_CREATE_MAPPED_BIT;
+                        allocationInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+                    }
+
+                    LU_CHECK_VULKAN(vmaCreateBuffer(
+                        vmaAllocator,
+                        &createInfo,
+                        &allocationInfo,
+                        &buffers[frameIndex].vkBuffer,
+                        &buffers[frameIndex].allocation,
+                        &buffers[frameIndex].allocationInfo
+                    ), "BufferGpuAddress", "vmaCreateBuffer")
+
+                    VkBufferDeviceAddressInfo addressInfo{};
+                    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                    addressInfo.buffer = buffers[frameIndex].vkBuffer;
+                    buffers[frameIndex].address = vkGetBufferDeviceAddress(vkDevice, &addressInfo);
+                }
+            }
+
+            ~BufferGpuAddress(){
+                for(auto& buffer : buffers){
+                    if(buffer.vkBuffer != VK_NULL_HANDLE){
+                        vmaDestroyBuffer(vmaAllocator, buffer.vkBuffer, buffer.allocation);
+                    }
+                }
+            }
+
+            BufferGpuAddress(const BufferGpuAddress&) = delete;
+            BufferGpuAddress& operator=(const BufferGpuAddress&) = delete;
+            BufferGpuAddress(BufferGpuAddress&&) = delete;
+            BufferGpuAddress& operator=(BufferGpuAddress&&) = delete;
+
+            VkBuffer getVkBuffer(uint32_t frameIndex) const override { return buffers[frameIndex].vkBuffer; }
+            VkBufferUsageFlags getVkBufferUsage() const override { return usage; }
+            VkDeviceAddress getDeviceAddress(uint32_t frameIndex) const { return buffers[frameIndex].address; }
+
+            void write(uint32_t frameIndex, uint32_t index, const T& value){
+                LU_ASSERT(hostVisible && buffers[frameIndex].allocationInfo.pMappedData != nullptr,
+                    "BufferGpuAddress", "write", "Buffer is not host visible.")
+                LU_ASSERT(index < size, "BufferGpuAddress", "write", "Index exceeds buffer capacity.")
+                auto* mapped = static_cast<T*>(buffers[frameIndex].allocationInfo.pMappedData);
+                mapped[index] = value;
+                LU_CHECK_VULKAN(vmaFlushAllocation(vmaAllocator, buffers[frameIndex].allocation,
+                    sizeof(T) * index, sizeof(T)), "BufferGpuAddress", "vmaFlushAllocation")
+            }
+
+            void writeAll(uint32_t frameIndex, const T* data, uint32_t count){
+                LU_ASSERT(hostVisible && buffers[frameIndex].allocationInfo.pMappedData != nullptr,
+                    "BufferGpuAddress", "writeAll", "Buffer is not host visible.")
+                LU_ASSERT(count <= size, "BufferGpuAddress", "writeAll", "Data exceeds buffer capacity.")
+                if(count == 0){
+                    return;
+                }
+                std::memcpy(buffers[frameIndex].allocationInfo.pMappedData, data, sizeof(T) * count);
+                LU_CHECK_VULKAN(vmaFlushAllocation(vmaAllocator, buffers[frameIndex].allocation,
+                    0, sizeof(T) * count), "BufferGpuAddress", "vmaFlushAllocation")
+            }
+
+        private:
+            struct FrameBuffer {
+                VkBuffer vkBuffer{VK_NULL_HANDLE};
+                VmaAllocation allocation{nullptr};
+                VmaAllocationInfo allocationInfo{};
+                VkDeviceAddress address{0};
+            };
+
+            uint32_t size;
+            VkBufferUsageFlags usage;
+            bool hostVisible;
+            std::array<FrameBuffer, MAX_FRAMES_IN_FLIGHT> buffers{};
+        };
+
+        template<typename T>
         class BufferGpuIndexed final : public IBufferResource {
         public:
                         explicit BufferGpuIndexed(uint32_t size, VkBufferUsageFlags usage)
@@ -543,23 +637,28 @@ namespace Lu
                 buffer(size),
                 sizeCpu(0) {}
 
-            void add(std::shared_ptr<T> element){
+            explicit SlotBufferCpu() :
+            capacity(0),
+            buffer(0),
+            sizeCpu(0){}
+
+            void add(const T& element){
                 const auto index = allocate();
                 buffer[index] = std::move(element);
             }
 
             T& at(const uint32_t index){
                 LU_ASSERT(index < sizeCpu && buffer[index] != nullptr, "SlotBufferCpu", "at", "index or slot is invalid.")
-                return *buffer[index];
+                return buffer[index];
             }
 
             const T& at(const uint32_t index) const {
                 LU_ASSERT(index < sizeCpu && buffer[index] != nullptr, "SlotBufferCpu", "at", "index or slot is invalid.")
-                return *buffer[index];
+                return buffer[index];
             }
 
             void free(const uint32_t index){
-                buffer[index] = nullptr;
+                buffer[index] = T{};
                 freeSlotIndices.push_back(index);
             }
 
@@ -569,7 +668,7 @@ namespace Lu
             uint32_t capacity;
             uint32_t sizeCpu;
             std::vector<uint32_t> freeSlotIndices;
-            std::vector<std::shared_ptr<T>> buffer;
+            std::vector<T> buffer;
 
             const uint32_t allocate(){
                 uint32_t index;

@@ -145,7 +145,7 @@ namespace Lu
                 "vkQueueSubmit")
             }
 
-            void presentGraphics() const
+            VkResult presentGraphics() const
             {
 
                 VkPresentInfoKHR presentInfo{};
@@ -156,12 +156,15 @@ namespace Lu
                 presentInfo.pSwapchains = &swapchain.vkSwapchainKHR;
                 presentInfo.pImageIndices = &swapchain.imageIndex;
 
-                LU_CHECK_VULKAN
-                (vkQueuePresentKHR
+                const VkResult result = vkQueuePresentKHR
                 (vkQueue,
-                &presentInfo),
-                "Command::presentGraphics",
-                "vkQueuePresentKHR")
+                &presentInfo);
+
+                if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    LU_CHECK_VULKAN(result, "Command::presentGraphics", "vkQueuePresentKHR")
+                }
+                return result;
             }
 
 

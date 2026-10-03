@@ -26,7 +26,8 @@ struct Material{
     vec4 emission;
     float roughness;
     float metallic;
-    vec2 _pad;
+    uint pad0;
+    uint pad1;
 };
 
 struct Mesh {

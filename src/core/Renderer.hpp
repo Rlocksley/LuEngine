@@ -7,6 +7,8 @@
 #include "TransformPackage.hpp"
 #include "GeometryPackage.hpp"
 #include "MeshPackage.hpp"
+#include "MultiMeshPackage.hpp"
+#include "Channel.hpp"
 #include "FramerateMonitor.hpp"
 
 namespace Lu{
@@ -24,11 +26,15 @@ namespace Lu{
             using MeshGeometryEntity = flecs::entity_t;
             void createMeshGeometry(const MeshGeometryEntity entity, const std::vector<Vertex::Mesh>& vb, const std::vector<uint32_t> ib);
 
+            using MultiMeshPipeEntity = flecs::entity_t;
+            void createMultiMeshPipe(const MultiMeshPipeEntity entity, const GraphicsPipelineConfig& config);
+            void createMultiMeshComputePipe(const MultiMeshPipeEntity entity, const ComputePipelineConfig& config);
+
         private:
 
             void processEcsRequests();
             void record();
-            void submit();
+            VkResult submit();
             
             uint32_t frameIndex{0};
             std::array<Lu::Core::Command, MAX_FRAMES_IN_FLIGHT> command;
@@ -38,6 +44,8 @@ namespace Lu{
             TransformPackage transform;            
             GeometryPackage<Vertex::Mesh> meshGeometry;
             MeshPackage mesh;
+            MultiMeshPackage multiMesh;
+            std::deque<EcsRequest::CreateMultiMesh> pendingMultiMeshCreates;
 
             static void beginRendering(const Command& cmd);
             static void endRendering(const Command& cmd);

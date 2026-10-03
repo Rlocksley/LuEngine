@@ -12,6 +12,8 @@ namespace Lu{
             flecs::entity mesh;
             flecs::entity pipeline;
         };
+
+        struct MeshGpuDirty{};
     }
 
     namespace Module{
@@ -25,26 +27,43 @@ namespace Lu{
                     .with<Component::TransformGpu>().filter()
                     .term_at(2).up()
                     .term_at(3).up()
+                    .event(flecs::OnAdd)
                     .event(flecs::OnSet)
                     .each([](flecs::entity e, const Component::Mesh& mesh, const Component::Material& material) {
-                        GetChannel().send(EcsRequest::CreateMesh{
-                            e.parent().id(), e.id(), mesh.mesh.id(), mesh.pipeline.id(), material
-                        });
+                        e.add<Component::MeshGpuDirty>();
                     });
 
-                world.observer<const Component::Transform, const Component::TransformGpu>()
+                world.observer()
                     .with<Component::Mesh>().filter()
                     .with<Component::Material>().filter()
-                    .term_at(0).up()
-                    .term_at(1).up()
+                    .with<Component::Transform>()
+                    .with<Component::TransformGpu>()
+                    .term_at(2).up()
+                    .term_at(3).up()
                     .event(flecs::OnAdd)
-                    .each([](flecs::entity e, const Component::Transform& transform, const Component::TransformGpu& transformGpu) {
-                        const auto& mesh = e.get<Component::Mesh>();
-                        const auto& material = e.get<Component::Material>();
-                        GetChannel().send(EcsRequest::CreateMesh{
-                            e.parent().id(), e.id(), mesh.mesh.id(), mesh.pipeline.id(), material
-                        });
+                    .each([](flecs::entity e) {
+                        e.add<Component::MeshGpuDirty>();
                     });
+
+                world.system<const Component::Mesh, const Component::Material>()
+                .with<Component::MeshGpuDirty>()
+                .run([](flecs::iter it){
+                    std::vector<EcsRequest::EcsRequest> meshBuffer;
+                    
+                    while (it.next()) {
+                        auto meshes = it.field<const Component::Mesh>(0);
+                        auto materials = it.field<const Component::Material>(1);
+                        
+                        for (int i = 0; i < it.count(); ++i) {
+                            auto entity = it.entity(i);
+                            meshBuffer.push_back(EcsRequest::CreateMesh{entity.parent(), entity , meshes[i].mesh, meshes[i].pipeline, materials[i]});
+                            entity.remove<Component::MeshGpuDirty>();
+                        }
+                    }
+
+                    GetChannel().send(meshBuffer);
+                });
+
 
                 world.observer<const Component::Mesh, const Component::Material>()
                     .with<Component::Transform>()

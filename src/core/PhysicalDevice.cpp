@@ -1,4 +1,5 @@
 #include "PhysicalDevice.hpp"
+#include "Device.hpp"
 #include "Window.hpp"
 #include "Instance.hpp"
 #include "Surface.hpp"
@@ -82,13 +83,86 @@ namespace Lu
             return (numberModes > 0);
         }
 
-        bool hasVkSamplerAnisotropySupport(VkPhysicalDevice device)
+        bool hasRequiredDeviceExtensions(VkPhysicalDevice device)
         {
-            VkPhysicalDeviceFeatures features;
-            vkGetPhysicalDeviceFeatures
-            (device, &features);
+            uint32_t extensionCount = 0;
+            vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
 
-            return (features.samplerAnisotropy == VK_TRUE);
+            std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+            vkEnumerateDeviceExtensionProperties
+            (device, nullptr, &extensionCount, availableExtensions.data());
+
+            for(const char* requiredExtension : deviceExtensions)
+            {
+                bool found = std::any_of
+                (availableExtensions.begin(), availableExtensions.end(),
+                [requiredExtension](const VkExtensionProperties& extension)
+                {
+                    return std::strcmp(extension.extensionName, requiredExtension) == 0;
+                });
+
+                if(!found)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        bool hasRequiredFeatures(VkPhysicalDevice device)
+        {
+            VkPhysicalDeviceMaintenance5FeaturesKHR maintenance5Features{};
+            maintenance5Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES_KHR;
+            maintenance5Features.maintenance5 = VK_TRUE; 
+
+            VkPhysicalDeviceDeviceGeneratedCommandsFeaturesEXT dgcFeatures{};
+            dgcFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_GENERATED_COMMANDS_FEATURES_EXT;
+            dgcFeatures.deviceGeneratedCommands = VK_TRUE; 
+            dgcFeatures.pNext = &maintenance5Features;
+
+            VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
+            dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
+            dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+            dynamicRenderingFeatures.pNext = &dgcFeatures;
+
+            VkPhysicalDeviceVulkan12Features vulkan12Features{};
+            vulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+            vulkan12Features.runtimeDescriptorArray = VK_TRUE;
+            vulkan12Features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+            vulkan12Features.shaderStorageBufferArrayNonUniformIndexing = VK_TRUE;
+            vulkan12Features.drawIndirectCount = VK_TRUE;
+            vulkan12Features.bufferDeviceAddress = VK_TRUE;
+            vulkan12Features.pNext = &dynamicRenderingFeatures;
+
+            VkPhysicalDeviceVulkan11Features vulkan11Features{};
+            vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+            vulkan11Features.shaderDrawParameters = VK_TRUE;
+            vulkan11Features.multiview = VK_TRUE;
+            vulkan11Features.pNext = &vulkan12Features;
+
+            VkPhysicalDeviceFeatures2 deviceFeatures2{};
+            deviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+            deviceFeatures2.features.samplerAnisotropy = VK_TRUE;
+            deviceFeatures2.features.multiDrawIndirect = VK_TRUE;
+            deviceFeatures2.features.shaderInt64 = VK_TRUE;
+            deviceFeatures2.pNext = &vulkan11Features;
+
+            vkGetPhysicalDeviceFeatures2(device, &deviceFeatures2);
+
+            return deviceFeatures2.features.samplerAnisotropy &&
+                     deviceFeatures2.features.multiDrawIndirect &&
+                     deviceFeatures2.features.shaderInt64 &&
+                   vulkan11Features.shaderDrawParameters &&
+                   vulkan11Features.multiview &&
+                   vulkan12Features.runtimeDescriptorArray &&
+                   vulkan12Features.shaderSampledImageArrayNonUniformIndexing &&
+                   vulkan12Features.shaderStorageBufferArrayNonUniformIndexing &&
+                   vulkan12Features.drawIndirectCount &&
+                   vulkan12Features.bufferDeviceAddress &&
+                   dynamicRenderingFeatures.dynamicRendering &&
+                   dgcFeatures.deviceGeneratedCommands &&
+                   maintenance5Features.maintenance5;
         }
 
         bool fullfillsRequirements(VkPhysicalDevice device)
@@ -96,7 +170,8 @@ namespace Lu
             return (isComputeGraphicsPresent(device) &&
             hasVkSurfaceFormatKHRSupport(device) &&
             hasVkPresentModeKHRSupport(device) &&
-            hasVkSamplerAnisotropySupport(device));
+            hasRequiredDeviceExtensions(device) &&
+            hasRequiredFeatures(device));
         }
 
         void pickQueueFamilyIndex()
@@ -212,16 +287,9 @@ namespace Lu
             vkPresentModeKHR = modes[0];
         }
 
-        void getVkPhysicalDeviceFeatures()
-        {
-            vkGetPhysicalDeviceFeatures
-            (vkPhysicalDevice,
-            &vkPhysicalDeviceFeatures);
-        }
-
         void getVkPhysicalDeviceProperties()
         {
-            vkGetPhysicalDeviceProperties
+            vkGetPhysicalDeviceProperties                                     
             (vkPhysicalDevice,
             &vkPhysicalDeviceProperties);
         }
@@ -272,6 +340,14 @@ namespace Lu
             clamp(vkExtent2D.height,
             vkSurfaceCapabilitiesKHR.minImageExtent.height,
             vkSurfaceCapabilitiesKHR.maxImageExtent.height);
+        }
+
+        void refreshSurfaceState()
+        {
+            getVkSurfaceCapabilitiesKHR();
+            pickVkSurfaceFormatKHR();
+            pickVkPresentModeKHR();
+            chooseVkExtent2D();
         }
 
         void checkVkSampleCountFlagBits()
@@ -349,7 +425,6 @@ namespace Lu
             pickVkSurfaceFormatKHR();
             pickVkPresentModeKHR();
 
-            getVkPhysicalDeviceFeatures();
             getVkPhysicalDeviceProperties();
             getVkPhysicalDeviceMemoryProperties();
             getVkSurfaceCapabilitiesKHR();

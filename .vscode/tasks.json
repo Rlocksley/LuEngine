@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build lu_example1 (Debug)",
+      "label": "Build lu_example4 (Debug)",
       "type": "process",
       "command": "cmake",
       "args": [
@@ -11,13 +11,13 @@
         "--config",
         "Debug",
         "--target",
-        "lu_example1"
+        "lu_example4"
       ],
       "problemMatcher": "$msCompile",
       "group": "build"
     },
     {
-      "label": "Build lu_example1 (Release with debug info)",
+      "label": "Build lu_example4 (Release with debug info)",
       "type": "process",
       "command": "cmake",
       "args": [
@@ -26,7 +26,7 @@
         "--config",
         "RelWithDebInfo",
         "--target",
-        "lu_example1"
+        "lu_example4"
       ],
       "problemMatcher": "$msCompile"
     }

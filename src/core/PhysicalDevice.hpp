@@ -9,7 +9,6 @@ namespace Lu
         //PhysicalDeviceInfo
         inline uint32_t queueFamilyIndex;
         inline VkPresentModeKHR vkPresentModeKHR;
-        inline VkPhysicalDeviceFeatures vkPhysicalDeviceFeatures;
         inline VkPhysicalDeviceProperties vkPhysicalDeviceProperties;
         inline VkPhysicalDeviceMemoryProperties vkPhysicalDeviceMemoryProperties;
         
@@ -27,6 +26,7 @@ namespace Lu
         inline VkPhysicalDevice vkPhysicalDevice;
 
         void pickPhysicalDevice();
+        void refreshSurfaceState();
 
         uint32_t findMemoryType
         (uint32_t typeFilter, VkMemoryPropertyFlags properties,

@@ -11,10 +11,15 @@ namespace Lu
         
             glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
             
-            if(fullScreen)
+            if(fullscreen)
             {
                 GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-                const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+                const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+
+                if(mode == nullptr)
+                {
+                    LU_LOGE("createWindow", "glfwGetVideoMode", "failed to get primary monitor video mode")
+                }
 
                 windowWidth = static_cast<uint32_t>(mode->width);
                 windowHeight = static_cast<uint32_t>(mode->height);
