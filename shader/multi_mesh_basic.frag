@@ -19,15 +19,17 @@ struct Light {
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
     vec4 frustumPlanes[6];
-    mat4 projection;
-    mat4 view;
+    mat4 projection;       // Projection matrix
+    mat4 view;             // View matrix (world → view)
     mat4 viewProjection;
-    mat4 inverseProjection;
+    mat4 inverseProjection;// Inverse of projection
     vec4 camPos;
     vec4 camDir;
-    vec2 screenSize;
-    float nearClip;
-    float farClip;
+    vec2 screenSize;       // Width, height in pixels
+    float nearClip;        // Near plane distance
+    float farClip;         // Far plane distance
+    float deltaTime;
+    float time;
 } camera;
 
 vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 viewDirection) {

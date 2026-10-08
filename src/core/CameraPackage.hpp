@@ -3,6 +3,7 @@
 #include "Global.hpp"
 #include "Buffer.hpp"
 #include "Channel.hpp"
+#include "Time.hpp"
 #include <limits>
 
 namespace Lu{
@@ -20,6 +21,8 @@ namespace Lu{
             glm::vec2 screenSize{glm::vec2(0.0f)};  // Width, height in pixels
             float nearClip{0.0f};                   // Near plane distance
             float farClip{0.0f};                    // Far plane distance
+            float deltaTime{0.f};
+            float time{0.f};
         };
 
         class CameraPackage{

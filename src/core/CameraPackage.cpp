@@ -89,6 +89,8 @@ namespace Lu{
             cam.screenSize = glm::vec2(static_cast<float>(vkExtent2D.width), static_cast<float>(vkExtent2D.height));
             cam.nearClip = req.cameraData.nearClip;
             cam.farClip = req.cameraData.farClip;
+            cam.deltaTime = Time::deltaTime;
+            cam.time = Time::time;
 
             // Extract and normalize frustum planes from viewProjection
             const glm::vec4 row0(

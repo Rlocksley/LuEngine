@@ -45,6 +45,8 @@ layout(set = 0, binding = 0) uniform CameraBuffer {
     vec2 screenSize;       // Width, height in pixels
     float nearClip;        // Near plane distance
     float farClip;         // Far plane distance
+    float deltaTime;
+    float time;
 } camera;
 
 layout(set = 0, binding = 2) readonly buffer MeshBuffer {
