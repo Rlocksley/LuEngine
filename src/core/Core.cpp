@@ -60,6 +60,10 @@ namespace Core
         {
             glfwWaitEvents();
             glfwGetFramebufferSize(pGLFWwindow, &width, &height);
+            if(glfwWindowShouldClose(pGLFWwindow))
+            {
+                return;
+            }
         }
 
         windowWidth = static_cast<uint32_t>(width);

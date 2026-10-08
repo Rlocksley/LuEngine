@@ -57,7 +57,7 @@ layout(push_constant) uniform MultiMeshDispatchData {
 } pc;
 
 const float attractorB = 0.208186;
-const float attractorSpeedMultiplier = 2.0;
+const float attractorSpeedMultiplier = 0.5;
 
 vec3 thomasDerivative(vec3 point) {
     return vec3(
@@ -76,6 +76,11 @@ vec3 integrateThomas(vec3 point) {
     return point + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
 }
 
+vec3 hsvToRgb(vec3 hsv) {
+    vec3 p = abs(fract(hsv.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+    return hsv.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), hsv.y);
+}
+
 void main() {
     uint instanceId = gl_GlobalInvocationID.x;
     if (instanceId >= pc.transformBufferLength) {
@@ -88,8 +93,23 @@ void main() {
     }
 
     MultiMeshTransformBuffer transforms = MultiMeshTransformBuffer(mesh.transformBufferAddress);
-    Transform transform = transforms.values[instanceId].transform;
+    MultiMeshTransform instance = transforms.values[instanceId];
+    Transform transform = instance.transform;
     transform.position.xyz = integrateThomas(transform.position.xyz);
     transform.model[3] = vec4(transform.position.xyz, 1.0);
-    transforms.values[instanceId].transform = transform;
+
+    // Map the attractor's evolving 3D state to a vivid, smoothly varying palette.
+    vec3 point = transform.position.xyz;
+    float angleHue = atan(point.y, point.x) * 0.15915494;
+    float hue = fract(0.56 + angleHue + point.z * 0.035);
+    float activity = clamp(length(thomasDerivative(point)) * 0.35, 0.0, 1.0);
+    vec3 color = hsvToRgb(vec3(hue, 0.9, 0.78 + 0.22 * activity));
+
+    instance.transform = transform;
+    instance.material.albedo = vec4(color, 1.0);
+    instance.material.ambient = vec4(color * 0.10, 1.0);
+    instance.material.emission = vec4(color * (0.08 + 0.16 * activity), 1.0);
+    instance.material.roughness = 0.32 + 0.28 * (1.0 - activity);
+    instance.material.metallic = 0.12 + 0.28 * activity;
+    transforms.values[instanceId] = instance;
 }

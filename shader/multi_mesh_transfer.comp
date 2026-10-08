@@ -24,7 +24,7 @@ struct Material {
     uint pad1;
 };
 
-struct MultiMeshTransform {
+struct MultiMeshMeshInstance {
     Material material;
     Transform transform;
 };
@@ -77,16 +77,16 @@ struct GeometryInfo {
     vec4 boundingSphere;
 };
 
-layout(buffer_reference, std430, buffer_reference_align = 16) writeonly buffer MultiMeshTransformOutput {
-    MultiMeshTransform values[];
+layout(buffer_reference, std430, buffer_reference_align = 16) writeonly buffer MultiMeshMeshInstanceOutput {
+    MultiMeshMeshInstance values[];
 };
 
 layout(set = 0, binding = 0, std430) readonly buffer MultiMeshInstanceBuffer {
     MultiMeshInstance values[];
 } instances;
 
-layout(set = 0, binding = 1, std430) readonly buffer TransformUploadBuffer {
-    MultiMeshTransform values[];
+layout(set = 0, binding = 1, std430) readonly buffer MeshInstanceUploadBuffer {
+    MultiMeshMeshInstance values[];
 } transformUploads;
 
 layout(set = 0, binding = 2, std430) buffer MultiMeshBuffer {
@@ -107,7 +107,7 @@ layout(set = 0, binding = 5, std430) readonly buffer GeometryInfoBuffer {
 
 layout(push_constant) uniform TransferPushConstants {
     uint instanceCount;
-    uint transformCount;
+    uint meshInstanceCount;
     float deltaTime;
 } pc;
 
@@ -125,8 +125,8 @@ void main() {
 
     if (mesh.valid != 0u && transformIndex < transformCount &&
         instance.begin + transformIndex < pc.transformCount) {
-        MultiMeshTransformOutput destination =
-            MultiMeshTransformOutput(mesh.transformBufferAddress);
+        MultiMeshMeshInstanceOutput destination =
+            MultiMeshMeshInstanceOutput(mesh.transformBufferAddress);
         destination.values[transformIndex] =
             transformUploads.values[instance.begin + transformIndex];
     }

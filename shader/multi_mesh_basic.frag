@@ -6,6 +6,7 @@ layout(location = 2) in vec2 inTexCoord;
 layout(location = 3) flat in vec4 inMaterialAlbedo;
 layout(location = 4) flat in vec4 inMaterialAmbient;
 layout(location = 5) in vec3 inWorldPos;
+layout(location = 6) flat in vec4 inMaterialEmission;
 
 layout(location = 0) out vec4 outColor;
 
@@ -35,19 +36,21 @@ vec3 calculateDirectionalLight(Light light, vec3 normal, vec3 viewDirection) {
     vec3 diffuse = normalLight * light.color.rgb * light.color.a;
     vec3 halfwayDirection = normalize(lightDirection + viewDirection);
     float normalHalfway = max(dot(normal, halfwayDirection), 0.0);
-    vec3 specular = pow(normalHalfway, 32.0) * light.color.rgb * light.color.a;
+    vec3 specular = pow(normalHalfway, 32.0) * light.color.rgb * light.color.a * 0.18;
     return diffuse + specular;
 }
 
 void main() {
     Light light;
     light.direction = vec4(-1.0, -1.0, -1.0, 1.0);
-    light.color = vec4(1.0, 1.0, 1.0, 1000.0);
+    // Keep lighting in a display-friendly range; 1000 here saturated every albedo to white.
+    light.color = vec4(1.0, 1.0, 1.0, 0.85);
 
     vec3 normal = normalize(inWorldNormal);
     vec3 viewDirection = normalize(camera.camPos.xyz - inWorldPos);
     vec3 lighting = inMaterialAmbient.xyz + calculateDirectionalLight(light, normal, viewDirection);
 
-    outColor = vec4(inColor.rgb * inMaterialAlbedo.rgb * lighting,
-                    inColor.a * inMaterialAlbedo.a);
+    vec3 litColor = inColor.rgb * inMaterialAlbedo.rgb * lighting;
+    vec3 finalColor = litColor + inMaterialEmission.rgb;
+    outColor = vec4(finalColor, inColor.a * inMaterialAlbedo.a);
 }

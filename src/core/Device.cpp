@@ -73,6 +73,18 @@ namespace Lu
             "createDevice",
             "vkCreateDevice")
 
+            vkCreateIndirectCommandsLayoutEXT = reinterpret_cast<PFN_vkCreateIndirectCommandsLayoutEXT>(
+                vkGetDeviceProcAddr(vkDevice, "vkCreateIndirectCommandsLayoutEXT"));
+            vkDestroyIndirectCommandsLayoutEXT = reinterpret_cast<PFN_vkDestroyIndirectCommandsLayoutEXT>(
+                vkGetDeviceProcAddr(vkDevice, "vkDestroyIndirectCommandsLayoutEXT"));
+            vkGetGeneratedCommandsMemoryRequirementsEXT = reinterpret_cast<PFN_vkGetGeneratedCommandsMemoryRequirementsEXT>(
+                vkGetDeviceProcAddr(vkDevice, "vkGetGeneratedCommandsMemoryRequirementsEXT"));
+            vkCmdExecuteGeneratedCommandsEXT = reinterpret_cast<PFN_vkCmdExecuteGeneratedCommandsEXT>(
+                vkGetDeviceProcAddr(vkDevice, "vkCmdExecuteGeneratedCommandsEXT"));
+            LU_ASSERT(vkCreateIndirectCommandsLayoutEXT && vkDestroyIndirectCommandsLayoutEXT &&
+                vkGetGeneratedCommandsMemoryRequirementsEXT && vkCmdExecuteGeneratedCommandsEXT,
+                "Device", "createDevice", "DGC extension procedures are unavailable.")
+
             #ifdef LU_DEBUG
             LU_LOGI("Device", "created", "")
             #endif

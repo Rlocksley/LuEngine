@@ -17,8 +17,8 @@ struct MultiMeshDemoModule {
                 .speed = 20.0f,
                 .rotationSpeed = 0.005f,
                 .fov = glm::radians(75.0f),
-                .nearClip = 0.1f,
-                .farClip = 500.0f
+                .nearClip = 0.02f,
+                .farClip = 100.0f
             })
             .add<Lu::Component::Transform>();
 
@@ -55,16 +55,11 @@ struct MultiMeshDemoModule {
                               random(-8.0f, 8.0f)),
                     random(-3.1415926f, 3.1415926f),
                     axis,
-                    glm::vec3(0.025f)
+                    glm::vec3(0.035f)
                 };
-                instance.material.albedo = glm::vec4(
-                    0.25f + 0.75f * random(0.0f, 1.0f),
-                    0.25f + 0.75f * random(0.0f, 1.0f),
-                    0.25f + 0.75f * random(0.0f, 1.0f),
-                    1.0f);
-                instance.material.ambient = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
-                instance.material.roughness = 0.65f;
-                instance.material.metallic = 0.0f;
+                // The compute shader animates this material from the attractor state.
+                instance.material.albedo = glm::vec4(1.0f);
+                instance.material.ambient = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
                 instances.push_back(std::move(instance));
             }
 

@@ -16,38 +16,36 @@ namespace Lu{
             uint32_t valid{0};
             uint32_t _pad0{0};
             uint32_t _pad1{0};
-            VkDeviceAddress transformBufferAddress{0};
-            uint32_t _pad2{0};
-            uint32_t _pad3{0};
+            VkDeviceAddress meshInstanceBufferAddress[2]{0, 0};
             glm::vec4 cullSphere{0.f, 0.f, 0.f, 0.f};
         };
 
         using MultiMeshId = uint32_t;
-        using MultiMeshTransformRangeId = uint32_t;
+        using MultiMeshMeshInstanceRangeId = uint32_t;
 
         struct MultiMeshInstance {
             MultiMesh mesh{};
             MultiMeshId id{0};
-            MultiMeshTransformRangeId begin{0};
-            MultiMeshTransformRangeId end{0};
-            uint32_t _pad{0};
+            MultiMeshMeshInstanceRangeId begin{0};
+            uint32_t _pad0{0};
+            uint32_t _pad1{0};
 
             MultiMeshInstance() = default;
             MultiMeshInstance(const MultiMesh mesh, MultiMeshId id)
                 : mesh(mesh), id(id) {}
             MultiMeshInstance(const MultiMesh mesh, MultiMeshId id,
-                              MultiMeshTransformRangeId begin, MultiMeshTransformRangeId end,
-                              uint32_t padding = 0)
-                : mesh(mesh), id(id), begin(begin), end(end), _pad(padding) {}
+                              MultiMeshMeshInstanceRangeId begin)
+                : mesh(mesh), id(id), begin(begin), _pad0(0), _pad1(0) {}
         };
 
         static_assert(sizeof(Material) == 80);
-        static_assert(offsetof(MultiMesh, transformBufferAddress) == 32);
+        static_assert(offsetof(MultiMesh, meshInstanceBufferAddress) == 32);
         static_assert(offsetof(MultiMesh, cullSphere) == 48);
         static_assert(sizeof(MultiMesh) == 64);
         static_assert(offsetof(MultiMeshInstance, id) == 64);
         static_assert(offsetof(MultiMeshInstance, begin) == 68);
-        static_assert(offsetof(MultiMeshInstance, end) == 72);
+        static_assert(offsetof(MultiMeshInstance, _pad0) == 72);
+        static_assert(offsetof(MultiMeshInstance, _pad1) == 76);
         static_assert(sizeof(MultiMeshInstance) == 80);
     }
 }

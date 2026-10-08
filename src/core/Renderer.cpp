@@ -89,7 +89,7 @@ namespace Lu{
             auto vecEcsRequests = GetChannel().drain(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME);
             for(auto& request : vecEcsRequests){
                 std::visit(variant_match{
-                    
+                     
                         [&](const EcsRequest::CreateTransform& req){
                             transform.createTransform(req.entity, req.transform);
                         },
@@ -133,11 +133,10 @@ namespace Lu{
                 pendingMultiMeshCreates.pop_front();
                 multiMesh.createMultiMesh(
                     request.entity,
-                    request.mesh,
                     request.computePipe,
                     request.pipe,
                     transform.getTransformId(request.parent),
-                    meshGeometry,
+                    meshGeometry.getGeometryInfoId(request.mesh),
                     request.instances,
                     request.cullSphere
                 );

@@ -14,6 +14,7 @@ layout(location = 2) out vec2 outTexCoord;
 layout(location = 3) flat out vec4 outMaterialAlbedo;
 layout(location = 4) flat out vec4 outMaterialAmbient;
 layout(location = 5) out vec3 outWorldPos;
+layout(location = 6) flat out vec4 outMaterialEmission;
 
 struct Transform {
     mat4 model;
@@ -96,4 +97,5 @@ void main() {
     outMaterialAlbedo = instance.material.albedo;
     outMaterialAmbient = instance.material.ambient;
     outWorldPos = worldPosition.xyz;
+    outMaterialEmission = instance.material.emission;
 }
