@@ -40,7 +40,7 @@ struct MultiMeshDemoModule {
                 })
                 .add<Lu::Component::TransformGpu>();
 
-            const uint32_t instanceCount = static_cast<uint32_t>(random(15000.0f, 15000.0f));
+            const uint32_t instanceCount = static_cast<uint32_t>(random(10000.0f, 10000.0f));
             std::vector<Lu::Component::MultiMeshInstance> instances;
             instances.reserve(instanceCount);
             for(uint32_t instanceIndex = 0; instanceIndex < instanceCount; ++instanceIndex){
@@ -80,7 +80,7 @@ int main(){
     Lu::App("LuEngine MultiMesh Thomas Attractor", true, 1600, 1000)
         .registerMultiMeshPipe(Lu::GraphicsPipelineConfig{
             .name = "MultiMeshPipe::Basic",
-            .capacity = Lu::Core::MAX_INSTANCED_MESHES,
+            .capacity = Lu::Core::MAX_MULTI_MESH_INSTANCES,
             .vertexShader = "shader/multi_mesh_basic.vert.spv",
             .fragmentShader = "shader/multi_mesh_basic.frag.spv"
         })

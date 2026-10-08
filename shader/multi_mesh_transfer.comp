@@ -38,9 +38,7 @@ struct MultiMesh {
     uint valid;
     uint _pad0;
     uint _pad1;
-    uint64_t transformBufferAddress;
-    uint _pad2;
-    uint _pad3;
+    uint64_t meshInstanceBufferAddress[2];
     vec4 cullSphere;
 };
 
@@ -48,8 +46,8 @@ struct MultiMeshInstance {
     MultiMesh mesh;
     uint id;
     uint begin;
-    uint end;
-    uint _pad;
+    uint _pad0;
+    uint _pad1;
 };
 
 struct IndirectDispatch {
@@ -112,7 +110,7 @@ layout(push_constant) uniform TransferPushConstants {
 } pc;
 
 void main() {
-    uint instanceIndex = gl_WorkGroupID.y;
+    uint instanceIndex = gl_GlobalInvocationID.y;
     if (instanceIndex >= pc.instanceCount) {
         return;
     }
@@ -120,15 +118,14 @@ void main() {
     MultiMeshInstance instance = instances.values[instanceIndex];
     uint id = instance.id;
     MultiMesh mesh = instance.mesh;
-    uint transformCount = instance.end - instance.begin;
-    uint transformIndex = gl_GlobalInvocationID.x;
+    uint meshInstanceIndex = gl_GlobalInvocationID.x;
 
-    if (mesh.valid != 0u && transformIndex < transformCount &&
-        instance.begin + transformIndex < pc.transformCount) {
+    if (mesh.valid != 0u && meshInstanceIndex < mesh.size &&
+        (instance.begin + meshInstanceIndex) < pc.meshInstanceCount) {
         MultiMeshMeshInstanceOutput destination =
-            MultiMeshMeshInstanceOutput(mesh.transformBufferAddress);
-        destination.values[transformIndex] =
-            transformUploads.values[instance.begin + transformIndex];
+            MultiMeshMeshInstanceOutput(mesh.meshInstanceBufferAddress[0]);
+        destination.values[meshInstanceIndex] =
+            transformUploads.values[instance.begin + meshInstanceIndex];
     }
 
     if (gl_GlobalInvocationID.x == 0u) {
@@ -140,12 +137,11 @@ void main() {
         }
 
         if (mesh.valid != 0u) {
-            mesh.size = transformCount;
             GeometryInfo geometry = geometryInfos.values[mesh.meshInfoId];
             dispatchBuffers[nonuniformEXT(mesh.computePipeId)].commands[id] =
-                IndirectDispatch(id, transformCount, pc.deltaTime, transformCount, 1u, 1u);
+                IndirectDispatch(id, mesh.size, pc.deltaTime, mesh.size, 1u, 1u);
             drawBuffers[nonuniformEXT(mesh.pipelineId)].commands[id] =
-                DrawIndexedIndirectCommand(geometry.indexCount, transformCount,
+                DrawIndexedIndirectCommand(geometry.indexCount, mesh.size,
                     geometry.firstIndex, geometry.vertexOffset, 0u);
         }
 

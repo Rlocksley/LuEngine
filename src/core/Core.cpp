@@ -1,5 +1,4 @@
 #include "Core.hpp"
-#include "Mutex.hpp"
 #include "Image.hpp"
 
 namespace Lu

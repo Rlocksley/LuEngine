@@ -22,7 +22,7 @@ struct Material {
     vec2 _pad;
 };
 
-struct MultiMeshTransform {
+struct MeshInstance {
     Material material;
     Transform transform;
 };
@@ -36,14 +36,12 @@ struct MultiMesh {
     uint valid;
     uint _pad0;
     uint _pad1;
-    uint64_t transformBufferAddress;
-    uint _pad2;
-    uint _pad3;
+    uint64_t meshInstanceBufferAddress[2];
     vec4 cullSphere;
 };
 
-layout(buffer_reference, std430, buffer_reference_align = 16) buffer MultiMeshTransformBuffer {
-    MultiMeshTransform values[];
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer MeshInstanceBuffer {
+    MeshInstance values[];
 };
 
 layout(set = 0, binding = 0, std430) readonly buffer MultiMeshBuffer {
@@ -92,8 +90,8 @@ void main() {
         return;
     }
 
-    MultiMeshTransformBuffer transforms = MultiMeshTransformBuffer(mesh.transformBufferAddress);
-    MultiMeshTransform instance = transforms.values[instanceId];
+    MeshInstanceBuffer meshInstancesIn = MeshInstanceBuffer(mesh.meshInstanceBufferAddress[0]);
+    MeshInstance instance = meshInstancesIn.values[instanceId];
     Transform transform = instance.transform;
     transform.position.xyz = integrateThomas(transform.position.xyz);
     transform.model[3] = vec4(transform.position.xyz, 1.0);
@@ -111,5 +109,7 @@ void main() {
     instance.material.emission = vec4(color * (0.08 + 0.16 * activity), 1.0);
     instance.material.roughness = 0.32 + 0.28 * (1.0 - activity);
     instance.material.metallic = 0.12 + 0.28 * activity;
-    transforms.values[instanceId] = instance;
+    
+    MeshInstanceBuffer meshInstancesOut = MeshInstanceBuffer(mesh.meshInstanceBufferAddress[1]);
+    meshInstancesOut.values[instanceId] = instance;
 }

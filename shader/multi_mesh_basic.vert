@@ -35,7 +35,7 @@ struct Material {
     uint pad1;
 };
 
-struct MultiMeshTransform {
+struct MeshInstance {
     Material material;
     Transform transform;
 };
@@ -49,14 +49,12 @@ struct MultiMesh {
     uint valid;
     uint _pad0;
     uint _pad1;
-    uint64_t transformBufferAddress;
-    uint _pad2;
-    uint _pad3;
+    uint64_t meshInstanceBufferAddress[2];
     vec4 cullSphere;
 };
 
-layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer MultiMeshTransformBuffer {
-    MultiMeshTransform values[];
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer MeshInstanceBuffer {
+    MeshInstance values[];
 };
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
@@ -82,9 +80,9 @@ layout(set = 0, binding = 2, std430) readonly buffer MultiMeshBuffer {
 
 void main() {
     MultiMesh mesh = multiMeshes.values[gl_DrawID];
-    MultiMeshTransformBuffer transformBuffer =
-        MultiMeshTransformBuffer(mesh.transformBufferAddress);
-    MultiMeshTransform instance = transformBuffer.values[gl_InstanceIndex];
+    MeshInstanceBuffer transformBuffer =
+        MeshInstanceBuffer(mesh.meshInstanceBufferAddress[0]);
+    MeshInstance instance = transformBuffer.values[gl_InstanceIndex];
     Transform parent = parentTransforms.values[mesh.transformId];
 
     mat4 model = parent.model * instance.transform.model;

@@ -3,7 +3,6 @@
 #include "Global.hpp"
 #include "Device.hpp"
 #include "PhysicalDevice.hpp"
-#include "RenderPass.hpp"
 #include "Shader.hpp"
 #include "Buffer.hpp"
 #include "PipelineConfig.hpp"

@@ -108,7 +108,7 @@ namespace Lu{
                              const GeometryPackage<Vertex::Mesh>& geometry) :
                             instanceBuffer(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME*MAX_FRAMES_IN_FLIGHT,
                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-                            meshInstanceUploadBuffer(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME*MAX_MULTI_MESH_INSTANCES,
+                            meshInstanceUploadBuffer(MAX_MULTI_MESH_UPLOAD_INSTANCES,
                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | 
                                 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT),
                             multiMeshBuffer(MAX_MULTI_MESHES,
@@ -181,7 +181,7 @@ namespace Lu{
                 indirectDispatchBufferArray[pipeId] = std::make_shared<BufferGpu<IndirectDispatch>>(
                     MAX_MULTI_MESHES,
                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT
+                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
                 );
                 initializeBuffer(*indirectDispatchBufferArray[pipeId]);
                 indirectDispatchBufferDescriptorArray[pipeId] = indirectDispatchBufferArray[pipeId];
@@ -252,7 +252,8 @@ namespace Lu{
                     data.transforms.emplace_back(instance);
                 }
 
-                if(instances.size() != meshInstanceBufferArray[id]->getSize()){
+                if(!meshInstanceBufferArray[id] ||
+                   instances.size() != meshInstanceBufferArray[id]->getSize()){
                     meshInstanceBufferArray[id] = std::make_shared<BufferGpu<MultiMeshMeshInstance>>(
                         static_cast<uint32_t>(data.transforms.size()),
                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | 
@@ -335,6 +336,10 @@ namespace Lu{
                 });
 
 
+                std::erase_if(retiredMeshInstanceBuffers, [&](RetiredMeshInstanceBuffer& retired){
+                    retired.framesRemaining--;
+                    return retired.framesRemaining <= 0;
+                });
             }
 
             void copy(uint32_t frameIndex, const Command& command){
@@ -367,9 +372,11 @@ namespace Lu{
                 struct TransferPushConstants{
                     uint32_t instanceCount;
                     uint32_t meshInstanceCount;
+                    float deltaTime;
                 } transferConstants {                    
                     uploadInstanceCount,
-                    uploadMeshInstanceCounts[frameIndex]
+                    uploadMeshInstanceCounts[frameIndex],
+                    Time::deltaTime
                 };
                 
                 vkCmdPushConstants
@@ -381,7 +388,7 @@ namespace Lu{
 
                 vkCmdDispatch
                 (command.vkCommandBuffer,
-                (uploadMeshInstanceCounts[frameIndex] + 255u) / 256u, 
+                std::max(1u, (uploadMaxMeshInstanceCounts[frameIndex] + 255u) / 256u),
                 uploadInstanceCount,
                 1);
             }
@@ -402,8 +409,10 @@ namespace Lu{
                 
                 struct CullPushConstants{
                     uint32_t multiMeshCount;
+                    float deltaTime;
                 } cullConstants{
-                    multiMeshBuffer.size() 
+                    multiMeshBuffer.size(), 
+                    Time::deltaTime
                 };
 
                 vkCmdPushConstants
@@ -449,8 +458,9 @@ namespace Lu{
                     generatedInfo.preprocessAddress = preprocessBufferArray[pipeId]->getVkDeviceAddress(frameIndex);
                     generatedInfo.preprocessSize = preprocessBufferSizes[pipeId];
                     generatedInfo.maxSequenceCount = multiMeshBuffer.size();
-                    
-                    vkCmdExecuteGeneratedCommandsEXT(command.vkCommandBuffer, VK_FALSE, &generatedInfo);
+                    if(generatedInfo.maxSequenceCount > 0){
+                        vkCmdExecuteGeneratedCommandsEXT(command.vkCommandBuffer, VK_FALSE, &generatedInfo);
+                    }
                 }
             }
 

@@ -21,9 +21,7 @@ struct MultiMesh {
     uint valid;
     uint _pad0;
     uint _pad1;
-    uint64_t transformBufferAddress;
-    uint _pad2;
-    uint _pad3;
+    uint64_t meshInstanceBufferAddress[2];
     vec4 cullSphere;
 };
 
