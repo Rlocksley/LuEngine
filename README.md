@@ -2,7 +2,8 @@
 
 LuEngine is a C++ game engine built around two user-facing APIs:
 
-- **Game Logic API:** Flecs ECS components, systems, and modules. Game logic changes component data; engine modules observe those changes and synchronize renderable state to the GPU.
+- **Game Logic API:** You write your whole Game within flecs ECS.\
+   If you add/set/remove LuEngine Core Components, Observer are triggered, which talk to the Renderer.
 - **Shader API:** register graphics pipelines for meshes and multimeshes, \
   plus compute pipelines for multimesh-instance transformation. \
   Shaders follow the buffer layouts and descriptor bindings used by the engine templates.
@@ -15,7 +16,8 @@ The renderer is Vulkan-based.
 3.] install Visual Studio Code and install the Cpp and CMake Extensions\
 4.] clone vcpkg inside the parent directory of the LuEngine repo directory and `run vcpkg install [glfw3,glm,flecs]` \
 5.] open the LuEngine repo in Visual Studio Code and right click `LuEngine/CMakeLists.txt` -> build\
-6.] compile the shaders `LuEngine/shader` with glslc and name the output `shader_name.[vert,frag,comp].spv`\
+6.] compile the shaders `LuEngine/shader/compile.bat`\
+(you need to get glslc from the Vulkan SDK and paste it into the shader directory)\
 7.] for your own project, create a directory in `examples` and\
 copy/adjust the `examples/CMakeLists.txt` and `.vscode/launch.json` , `.vscode/tasks.json`
 
@@ -179,7 +181,7 @@ register with
 App::registerMultiMeshPipe();
 ```
 ### Multi Mesh Compute Pipeline
-Templates: `shader/multi_mesh_thomas_attraktor`\
+Templates: `shader/multi_mesh_thomas_attraktor.comp`\
 register with
 ``` cpp
 App::registerMultiMeshComputePipe();
