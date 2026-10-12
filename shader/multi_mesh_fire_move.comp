@@ -1,0 +1,465 @@
+#version 460
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+// =============================================================================
+// multi_mesh_fire_move.comp
+//
+// Particle simulation for the fire MultiMeshes (flames, smoke, sparks, glow).
+// One invocation == one particle (the engine dispatches `size` workgroups of 1).
+//
+// The engine ping-pongs the instance buffer: this shader READS buffer [0] and
+// WRITES buffer [1]. Everything that has to survive to the next frame therefore
+// lives inside the MeshInstance itself. Nothing but the MeshInstance and the
+// push constant `deltaTime` is available, so we pack the particle state like this:
+//
+//   transform.position.xyz   particle position (local to the multimesh parent)
+//   transform.scale.xyz      current quad size (local units, written every frame)
+//   material.ambient.xyz     velocity
+//   material.ambient.w       billboard roll angle
+//   material.emission.x      age (seconds)
+//   material.emission.y      lifetime (seconds)
+//   material.emission.z      per-cycle random seed in [0,1)
+//   material.emission.w      shared "fire clock" (all particles advance together,
+//                            this is the time used by the fragment shaders)
+//   material.albedo.rgb      per-particle tint
+//   material.albedo.a        per-particle brightness factor
+//   material.roughness       base size (before the size-over-life curve)
+//   material.metallic        velocity stretch factor (sparks)
+//   material.texturesIds.x   particle index  (written by the CPU, constant)
+//   material.texturesIds.y   respawn cycle   (CPU writes -1 => "not initialised")
+//   material.texturesIds.z   particle kind   (written by the CPU, constant)
+//   material.texturesIds.w   flags: bit 0 = align the quad with the velocity (sparks)
+//
+// Glow particles do not integrate; they hover around an anchor stored in
+// material.ambient.xyz (the velocity slot is unused for them).
+//
+// Respawn is deterministic: hash(index, cycle, kind). The very first dispatch
+// (cycle == -1) pre-warms the particle by simulating it up to a random age, so
+// the fire is already burning in steady state on frame 0.
+// =============================================================================
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+struct Transform {
+    mat4 model;
+    mat4 normal;
+    vec4 scale;
+    vec4 rotation;
+    vec4 position;
+};
+
+struct Material {
+    ivec4 texturesIds;
+    vec4 albedo;
+    vec4 ambient;
+    vec4 emission;
+    float roughness;
+    float metallic;
+    vec2 _pad;
+};
+
+struct MeshInstance {
+    Material material;
+    Transform transform;
+};
+
+struct MultiMesh {
+    uint transformId;
+    uint computePipeId;
+    uint pipelineId;
+    uint meshInfoId;
+    uint size;
+    uint valid;
+    uint _pad0;
+    uint _pad1;
+    uint64_t meshInstanceBufferAddress[2];
+    vec4 cullSphere;
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer MeshInstanceBuffer {
+    MeshInstance values[];
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer MultiMeshBuffer {
+    MultiMesh values[];
+} multiMeshes;
+
+layout(push_constant) uniform MultiMeshDispatchData {
+    uint multiMeshId;
+    uint transformBufferLength;
+    float deltaTime;
+} pc;
+
+// ---- shared fire helpers (noise, SDF, palette) --------------------------------
+uint fireHash(uint x) {
+    uint state = x * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+// Uniform random float in [0,1). Advances the state.
+float fireRand(inout uint s) {
+    s = fireHash(s);
+    return float(s) * (1.0 / 4294967296.0);
+}
+
+// Sin-free float hash for lattice noise (Dave Hoskins).
+float hash13(vec3 p3) {
+    p3 = fract(p3 * 0.1031);
+    p3 += dot(p3, p3.zyx + 31.32);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+// 3D value noise, quintic interpolation. Output in [0,1].
+float noise3(vec3 x) {
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+
+    float n000 = hash13(i);
+    float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+    float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+    float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+    float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+    float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+    float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+    float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+
+    return mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+               mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
+}
+
+// Fractal Brownian motion, `octaves` in 1..5. Output ~[0,1].
+float fbm3(vec3 p, int octaves) {
+    const mat3 rot = mat3(0.00, 0.80, 0.60,
+                         -0.80, 0.36, -0.48,
+                         -0.60, -0.48, 0.64);
+    float sum = 0.0;
+    float amp = 0.5;
+    float norm = 0.0;
+    for (int i = 0; i < octaves; ++i) {
+        sum += amp * noise3(p);
+        norm += amp;
+        p = rot * p * 2.02 + vec3(1.7, 9.2, 3.1);
+        amp *= 0.5;
+    }
+    return sum / norm;
+}
+
+// Divergence-free turbulence (curl of a noise potential). Magnitude ~ 0..1.5.
+// 12 noise lookups; used by the compute shader only.
+vec3 curlNoise(vec3 p) {
+    const float e = 0.12;
+    const vec3 o1 = vec3(31.4, 17.7, 5.3);
+    const vec3 o2 = vec3(11.9, 47.1, 23.7);
+    const vec3 dx = vec3(e, 0.0, 0.0);
+    const vec3 dy = vec3(0.0, e, 0.0);
+    const vec3 dz = vec3(0.0, 0.0, e);
+
+    // potential psi = (n(p), n(p+o1), n(p+o2))
+    float dPsiZ_dy = noise3(p + o2 + dy) - noise3(p + o2 - dy);
+    float dPsiY_dz = noise3(p + o1 + dz) - noise3(p + o1 - dz);
+    float dPsiX_dz = noise3(p + dz) - noise3(p - dz);
+    float dPsiZ_dx = noise3(p + o2 + dx) - noise3(p + o2 - dx);
+    float dPsiY_dx = noise3(p + o1 + dx) - noise3(p + o1 - dx);
+    float dPsiX_dy = noise3(p + dy) - noise3(p - dy);
+
+    return vec3(dPsiZ_dy - dPsiY_dz,
+                dPsiX_dz - dPsiZ_dx,
+                dPsiY_dx - dPsiX_dy) / (2.0 * e);
+}
+
+// ---------------------------------------------------------------------------
+// SDF helpers
+// ---------------------------------------------------------------------------
+
+// Polynomial smooth minimum (smooth union of two distance fields).
+float smin(float a, float b, float k) {
+    float h = max(k - abs(a - b), 0.0) / k;
+    return min(a, b) - h * h * k * 0.25;
+}
+
+float sdCircle(vec2 p, vec2 c, float r) {
+    return length(p - c) - r;
+}
+
+// Capsule between (0,-h) and (0,+h), radius r.
+float sdVerticalCapsule(vec2 p, float h, float r) {
+    p.y -= clamp(p.y, -h, h);
+    return length(p) - r;
+}
+
+// ---------------------------------------------------------------------------
+// Colour (all values are LINEAR, the swapchain is sRGB)
+// ---------------------------------------------------------------------------
+
+// Black-body-ish flame ramp. t = 0 cold/dark, 1 = hot yellow-white, >1 = white.
+vec3 fireRamp(float t) {
+    const vec3 c0 = vec3(0.00, 0.00, 0.00);
+    const vec3 c1 = vec3(0.30, 0.012, 0.0);   // deep ember red
+    const vec3 c2 = vec3(0.90, 0.10, 0.008);  // red-orange
+    const vec3 c3 = vec3(1.00, 0.34, 0.02);   // orange
+    const vec3 c4 = vec3(1.00, 0.62, 0.10);   // yellow-orange
+    const vec3 c5 = vec3(1.00, 0.86, 0.42);   // yellow
+    const vec3 c6 = vec3(1.00, 0.97, 0.80);   // white-hot
+    vec3 c = mix(c0, c1, smoothstep(0.00, 0.18, t));
+    c = mix(c, c2, smoothstep(0.18, 0.38, t));
+    c = mix(c, c3, smoothstep(0.38, 0.58, t));
+    c = mix(c, c4, smoothstep(0.58, 0.78, t));
+    c = mix(c, c5, smoothstep(0.78, 0.98, t));
+    c = mix(c, c6, smoothstep(0.98, 1.25, t));
+    return c;
+}
+
+
+// -----------------------------------------------------------------------------
+// Kinds (must match the CPU side, material.texturesIds.z)
+// -----------------------------------------------------------------------------
+const int KIND_FLAME = 0;
+const int KIND_SMOKE = 1;
+const int KIND_SPARK = 2;
+const int KIND_GLOW  = 3;
+
+// -----------------------------------------------------------------------------
+// Tunables (units: metres / seconds, local to the multimesh parent)
+// -----------------------------------------------------------------------------
+// Flames
+const float FLAME_RADIUS  = 0.42;   // emitter disc radius
+const float FLAME_RISE    = 1.75;   // base buoyant speed
+const float FLAME_TURB    = 0.95;   // curl noise strength
+const float FLAME_SCROLL  = 2.2;    // how fast the turbulence field is advected upwards
+const float FLAME_RELAX   = 5.0;    // velocity relaxation rate (1/s)
+const float FLAME_WIND    = 0.55;
+// Smoke
+const float SMOKE_RADIUS  = 0.30;
+const float SMOKE_RISE    = 0.95;
+const float SMOKE_TURB    = 0.55;
+const float SMOKE_RELAX   = 1.3;
+const float SMOKE_WIND    = 0.9;
+// Sparks / embers
+const float SPARK_RADIUS  = 0.40;
+const float SPARK_RISE    = 2.2;
+const float SPARK_TURB    = 2.0;
+const float SPARK_RELAX   = 1.6;
+const float SPARK_WIND    = 1.3;
+
+struct Particle {
+    vec3 pos;
+    vec3 vel;
+    float age;
+    float life;
+    float seed;
+    float clock;
+    float sizeBase;
+    float roll;
+    float stretch;
+    int flags;
+    vec3 tint;
+    float bright;
+    int index;
+    int cycle;
+    int kind;
+};
+
+Particle unpackParticle(MeshInstance inst) {
+    Particle p;
+    p.pos = inst.transform.position.xyz;
+    p.vel = inst.material.ambient.xyz;
+    p.roll = inst.material.ambient.w;
+    p.age = inst.material.emission.x;
+    p.life = max(inst.material.emission.y, 1e-3);
+    p.seed = inst.material.emission.z;
+    p.clock = inst.material.emission.w;
+    p.tint = inst.material.albedo.rgb;
+    p.bright = inst.material.albedo.a;
+    p.sizeBase = inst.material.roughness;
+    p.stretch = inst.material.metallic;
+    p.index = inst.material.texturesIds.x;
+    p.cycle = inst.material.texturesIds.y;
+    p.kind = inst.material.texturesIds.z;
+    p.flags = inst.material.texturesIds.w;
+    return p;
+}
+
+// Slowly varying gusts that sway flames, smoke and sparks together.
+vec3 windAt(float clock) {
+    return vec3(sin(clock * 0.63) + 0.6 * sin(clock * 1.71 + 1.3),
+                0.0,
+                0.5 * sin(clock * 0.41 + 0.7) + 0.3 * sin(clock * 1.37));
+}
+
+// -----------------------------------------------------------------------------
+// Emission
+// -----------------------------------------------------------------------------
+void spawn(inout Particle p) {
+    uint s = fireHash(uint(p.index) * 0x9E3779B1u ^
+                      fireHash(uint(p.cycle) * 0x85EBCA6Bu + uint(p.kind) * 0xC2B2AE35u + 12345u));
+    float u0 = fireRand(s), u1 = fireRand(s), u2 = fireRand(s), u3 = fireRand(s);
+    float u4 = fireRand(s), u5 = fireRand(s), u6 = fireRand(s), u7 = fireRand(s);
+    float u8 = fireRand(s), u9 = fireRand(s);
+
+    p.age = 0.0;
+    p.seed = fireRand(s);
+    p.roll = 0.0;
+    p.stretch = 0.0;
+    p.flags = 0;
+    p.tint = vec3(1.0);
+    p.bright = 1.0;
+
+    if (p.kind == KIND_FLAME) {
+        float r = FLAME_RADIUS * sqrt(u0);
+        float th = 6.2831853 * u1;
+        float core = 1.0 - r / FLAME_RADIUS;                 // 1 in the middle, 0 at the rim
+        p.pos = vec3(r * cos(th), 0.10 + 0.10 * u2, r * sin(th));
+        p.life = mix(0.55, 1.20, u3) * (0.65 + 0.85 * core); // centre particles live longer => tall core
+        p.vel = vec3((u4 - 0.5) * 0.3, FLAME_RISE * (0.7 + 0.3 * core), (u5 - 0.5) * 0.3);
+        p.sizeBase = mix(0.75, 1.30, u6) * (0.75 + 0.25 * core);
+        p.stretch = 0.16;                                    // vertical streaking with speed
+        p.tint = vec3(1.0, mix(0.88, 1.0, u7), mix(0.75, 1.0, u7));
+        p.bright = mix(0.65, 1.15, u8);
+    } else if (p.kind == KIND_SMOKE) {
+        // smoke is born where the flames die out
+        float r = SMOKE_RADIUS * sqrt(u0);
+        float th = 6.2831853 * u1;
+        p.pos = vec3(r * cos(th), mix(0.8, 1.5, u2), r * sin(th));
+        p.life = mix(3.2, 5.8, u3);
+        p.vel = vec3((u4 - 0.5) * 0.3, SMOKE_RISE * mix(0.7, 1.1, u5), (u6 - 0.5) * 0.3);
+        p.sizeBase = mix(0.7, 1.25, u7);
+        float g = mix(0.014, 0.038, u8);
+        p.tint = vec3(g, g * 0.96, g * 0.92);
+        p.bright = mix(0.7, 1.2, u9);
+        p.roll = u9 * 6.2831853;
+    } else if (p.kind == KIND_SPARK) {
+        float r = SPARK_RADIUS * sqrt(u0);
+        float th = 6.2831853 * u1;
+        p.pos = vec3(r * cos(th), 0.10 + 0.50 * u2, r * sin(th));
+        p.life = mix(0.7, 2.8, u3 * u3);
+        p.vel = vec3((u4 - 0.5) * 1.2, SPARK_RISE * mix(0.5, 1.4, u5), (u6 - 0.5) * 1.2);
+        p.sizeBase = mix(0.030, 0.075, u7);
+        p.stretch = 1.0;
+        p.flags = 1;
+        p.bright = mix(0.6, 1.5, u8);
+    } else { // KIND_GLOW
+        float r = 0.25 * sqrt(u0);
+        float th = 6.2831853 * u1;
+        p.vel = vec3(r * cos(th), mix(0.35, 0.95, u2), r * sin(th)); // anchor
+        p.pos = p.vel;
+        p.life = 600.0;
+        p.sizeBase = mix(2.6, 3.8, u3);
+        p.bright = mix(0.6, 1.0, u4);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Motion
+// -----------------------------------------------------------------------------
+void integrate(inout Particle p, float dt) {
+    float a = clamp(p.age / p.life, 0.0, 1.0);
+    vec3 target = vec3(0.0);
+    float relax = 1.0;
+
+    if (p.kind == KIND_FLAME) {
+        vec3 q = vec3(p.pos.x * 1.5, p.pos.y - p.clock * FLAME_SCROLL, p.pos.z * 1.5);
+        vec3 turb = curlNoise(q) * FLAME_TURB * smoothstep(0.0, 0.3, a);
+        float rise = FLAME_RISE * mix(0.8, 1.2, p.seed) * (0.75 + 1.1 * a); // hot gas accelerates
+        vec3 inward = -vec3(p.pos.x, 0.0, p.pos.z) * (1.0 + 3.5 * a);      // flame tapers towards the tip
+        target = vec3(0.0, rise, 0.0) + inward + turb + windAt(p.clock) * (FLAME_WIND * a * a);
+        relax = FLAME_RELAX;
+    } else if (p.kind == KIND_SMOKE) {
+        vec3 q = p.pos * 0.7 + vec3(0.0, -p.clock * 0.35, 0.0);
+        vec3 turb = curlNoise(q) * SMOKE_TURB * (0.4 + a);
+        target = vec3(0.0, SMOKE_RISE * (1.0 - 0.4 * a), 0.0) + turb + windAt(p.clock) * (SMOKE_WIND * (0.3 + a));
+        relax = SMOKE_RELAX;
+        p.roll += (p.seed * 2.0 - 1.0) * 0.6 * dt;
+    } else if (p.kind == KIND_SPARK) {
+        vec3 q = p.pos * 1.8 + vec3(0.0, -p.clock * 1.2, 0.0);
+        vec3 turb = curlNoise(q) * SPARK_TURB;
+        target = vec3(0.0, SPARK_RISE * (1.0 - 0.7 * a) - 0.8 * a * a, 0.0) + turb + windAt(p.clock) * (SPARK_WIND * (0.5 + a));
+        relax = SPARK_RELAX;
+    }
+
+    if (p.kind == KIND_GLOW) {
+        float c = p.clock;
+        p.pos = p.vel + 0.12 * vec3(sin(c * 2.1 + p.seed * 40.0),
+                                    0.5 * sin(c * 1.3 + p.seed * 17.0),
+                                    cos(c * 1.7 + p.seed * 23.0));
+    } else {
+        p.vel += (target - p.vel) * (1.0 - exp(-relax * dt));
+        p.pos += p.vel * dt;
+    }
+
+    p.age += dt;
+    p.clock += dt;
+}
+
+// Quad size over the particle's life.
+float sizeOverLife(Particle p) {
+    float a = clamp(p.age / p.life, 0.0, 1.0);
+    if (p.kind == KIND_FLAME) {
+        // swell quickly after ignition, then shrink to a wisp
+        return p.sizeBase * smoothstep(0.0, 0.15, a) * (1.0 - 0.60 * smoothstep(0.3, 1.0, a)) + 0.02;
+    } else if (p.kind == KIND_SMOKE) {
+        return p.sizeBase * (0.45 + 1.9 * sqrt(a));
+    } else if (p.kind == KIND_SPARK) {
+        return p.sizeBase * (1.0 - 0.55 * a * a);
+    }
+    return p.sizeBase * (0.92 + 0.12 * sin(p.clock * 5.0 + p.seed * 30.0)); // glow breathing
+}
+
+void main() {
+    uint instanceId = gl_GlobalInvocationID.x;
+    if (instanceId >= pc.transformBufferLength) {
+        return;
+    }
+
+    MultiMesh mesh = multiMeshes.values[pc.multiMeshId];
+    if (mesh.valid == 0u) {
+        return;
+    }
+
+    MeshInstanceBuffer meshInstancesIn = MeshInstanceBuffer(mesh.meshInstanceBufferAddress[0]);
+    MeshInstance instance = meshInstancesIn.values[instanceId];
+    Particle p = unpackParticle(instance);
+
+    if (p.cycle < 0) {
+        // First dispatch: spawn and pre-warm to a random point of the first life.
+        p.cycle = 0;
+        spawn(p);
+        uint s = fireHash(uint(p.index) * 2654435761u + 77u);
+        float targetAge = (p.kind == KIND_GLOW) ? 0.0 : fireRand(s) * p.life;
+        int steps = clamp(int(ceil(targetAge / 0.04)), 1, 150);
+        float h = targetAge / float(steps);
+        p.clock = -targetAge;   // all particles end the pre-warm on the same clock value (0)
+        for (int i = 0; i < steps; ++i) {
+            integrate(p, h);
+        }
+        p.clock = 0.0;
+    } else {
+        integrate(p, pc.deltaTime);
+        if (p.age >= p.life) {
+            p.cycle += 1;
+            spawn(p);
+        }
+    }
+
+    float size = sizeOverLife(p);
+
+    // pack back
+    instance.transform.position = vec4(p.pos, 1.0);
+    instance.transform.scale = vec4(size, size, size, 1.0);
+    // keep the model matrix consistent so other (non billboard) shaders could still draw this instance
+    instance.transform.model = mat4(vec4(size, 0.0, 0.0, 0.0),
+                                    vec4(0.0, size, 0.0, 0.0),
+                                    vec4(0.0, 0.0, size, 0.0),
+                                    vec4(p.pos, 1.0));
+    instance.material.ambient = vec4(p.vel, p.roll);
+    instance.material.emission = vec4(p.age, p.life, p.seed, p.clock);
+    instance.material.albedo = vec4(p.tint, p.bright);
+    instance.material.roughness = p.sizeBase;
+    instance.material.metallic = p.stretch;
+    instance.material.texturesIds = ivec4(p.index, p.cycle, p.kind, p.flags);
+
+    MeshInstanceBuffer meshInstancesOut = MeshInstanceBuffer(mesh.meshInstanceBufferAddress[1]);
+    meshInstancesOut.values[instanceId] = instance;
+}

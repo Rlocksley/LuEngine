@@ -9,7 +9,7 @@ namespace Lu {
 
         struct Transform {
             glm::vec3 position{0.0f, 0.0f, 0.0f};
-            glm::quat rotation{0.0f, 0.0f, 0.0f, 1.0f}; // Identity quaternion
+            glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f}; // Identity quaternion
             glm::vec3 scale{1.0f, 1.0f, 1.0f};
 
             Transform() = default;

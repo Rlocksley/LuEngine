@@ -31,6 +31,12 @@ namespace Lu{
         std::vector<VkFormat> colorAttachments{};
         VkFormat depthAttachmentFormat{VK_FORMAT_D32_SFLOAT};
         uint32_t viewMask{0};
+        // Colour blend factors (only used if blendEnable). Defaults = classic alpha blending.
+        // Premultiplied alpha / additive effects (fire, glow, sparks):
+        //   srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+        //   dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
+        VkBlendFactor srcColorBlendFactor{VK_BLEND_FACTOR_SRC_ALPHA};
+        VkBlendFactor dstColorBlendFactor{VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA};
     };
 
     struct ComputePipelineConfig{

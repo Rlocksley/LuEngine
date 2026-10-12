@@ -9,7 +9,7 @@ layout(location = 4) in vec3 inWorldPos;
 
 layout(location = 0) out vec4 outColor;
 
-struct Material{
+struct Material {
     ivec4 textureIds; // x = albedo, y = normal, z = roughness, w = metallic
     vec4 albedo;
     vec4 ambient;
@@ -72,7 +72,7 @@ vec3 calculateDirectionalLight(Light light, vec3 N, vec3 V) {
 void main() {
     Light light;
     light.direction = vec4(-1,-1,-1,1);
-    light.color = vec4(1,1,1,1000);
+    light.color = vec4(1,1,1,10);
 
     Material material = meshes.meshes[inInstanceId].material;
 
