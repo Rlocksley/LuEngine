@@ -53,11 +53,11 @@ layout(set = 0, binding = 0) uniform CameraBuffer {
     float time;
 } camera;
 
-layout(set = 0, binding = 1) readonly buffer TransformBuffer {
+layout(set = 0, binding = 3) readonly buffer TransformBuffer {
     Transform transforms[];
 } transforms;
 
-layout(set = 0, binding = 2) readonly buffer MeshBuffer {
+layout(set = 0, binding = 4) readonly buffer MeshBuffer {
     Mesh meshes[];
 } meshes;
 

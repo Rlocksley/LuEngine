@@ -19,7 +19,7 @@ namespace Lu{
                 MAX_INDICES_PER_MESH,
                 MAX_MESH_INFOS
             ),
-            mesh(camera, transform, meshGeometry),
+            mesh(camera, transform, lights, meshGeometry),
             multiMesh(camera, transform, meshGeometry) {
         }
 
@@ -118,6 +118,18 @@ namespace Lu{
                         [&](const EcsRequest::DestroyMultiMesh& req){
                             multiMesh.destroyMultiMesh(req.entity);
                         },
+
+                        [&](const EcsRequest::CreateLight& req){
+                            lights.createLight(
+                                req.entity, 
+                                req.light, 
+                                transform.getTransformId(req.parent)
+                            );
+                        },
+
+                        [&](const EcsRequest::DestroyLight& req){
+                            lights.destroyLight(req.entity);
+                        },
                         
                         [&](const EcsRequest::UpdateCamera& req){
                             camera.update(req);
@@ -161,12 +173,13 @@ namespace Lu{
 
             
             //Copy To GPU
+            meshGeometry.copy(frameIndex, cmd);
             camera.copy(frameIndex, cmd);
             transform.copy(frameIndex, cmd);
+            lights.copy(frameIndex, cmd);
             mesh.copy(frameIndex, cmd);
             multiMesh.copy(frameIndex, cmd);
-            mesh.zeroOut(frameIndex, cmd);
-
+            
             //Pipeline Barrier
             copyBarrier(cmd);
 
@@ -185,9 +198,12 @@ namespace Lu{
             mesh.cull(frameIndex, cmd);
             multiMesh.cull(frameIndex, cmd);
 
-            //Execute generated commands after culling has written their indirect records.
+            //Pipeline Barrier
             cullBarrier(cmd);
-            multiMesh.executeCompute(frameIndex, cmd);
+
+            //move transforms/change materials of 
+            //multimesh meshinstances via compute shader
+            multiMesh.move(frameIndex, cmd);
 
             //Pipeline Barrier
             cullBarrier(cmd);
@@ -339,9 +355,14 @@ namespace Lu{
             recordBarrier(
                 cmd.vkCommandBuffer,
                 VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                    VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
                 VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
+                VK_ACCESS_SHADER_READ_BIT |
+                    VK_ACCESS_SHADER_WRITE_BIT |
+                    VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
+                    VK_ACCESS_INDEX_READ_BIT
             );
         }
 

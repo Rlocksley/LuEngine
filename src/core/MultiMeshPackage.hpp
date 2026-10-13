@@ -429,7 +429,7 @@ namespace Lu{
                 1);
             }
 
-            void executeCompute(uint32_t frameIndex, const Command& command) const{
+            void move(uint32_t frameIndex, const Command& command) const{
                 for(MultiMeshComputePipeId pipeId = 0; pipeId < compPipeArraySize; ++pipeId){
                     vkCmdBindPipeline
                     (command.vkCommandBuffer, 

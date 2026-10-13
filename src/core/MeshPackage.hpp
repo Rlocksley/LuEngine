@@ -12,6 +12,7 @@
 #include "CameraPackage.hpp"
 #include "TransformPackage.hpp"
 #include "GeometryPackage.hpp"
+#include "LightPackage.hpp"
 #include "PipelineConfig.hpp"
 #include <cstddef>
 
@@ -54,7 +55,8 @@ namespace Lu{
             uint32_t instanceBufferSize{0};
 
         public:
-        MeshPackage(const CameraPackage& camera, const TransformPackage& transforms, const GeometryPackage<Vertex::Mesh>& geometry)
+        MeshPackage(const CameraPackage& camera, const TransformPackage& transforms,
+            const LightPackage& lights, const GeometryPackage<Vertex::Mesh>& geometry)
             : instanceBuffer(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME*MAX_FRAMES_IN_FLIGHT, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
             meshBuffer(MAX_MESHES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
             indirectBufferArray(initIndirectBufferArray()),
@@ -85,7 +87,7 @@ namespace Lu{
 
             createTransferPipe();
             createCullPipe(camera, transforms, geometry);
-            createMeshDescriptorSet(camera, transforms);
+            createMeshDescriptorSet(camera, transforms, lights);
         }
 
         ~MeshPackage(){}
@@ -134,11 +136,14 @@ namespace Lu{
             );
         }
 
-        void createMeshDescriptorSet(const CameraPackage& camera, const TransformPackage& transforms){
+        void createMeshDescriptorSet(const CameraPackage& camera,
+            const TransformPackage& transforms, const LightPackage& lights){
             meshDescrSet
             .addUniformBuffer(0, camera.getCameraBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-            .addStorageBuffer(1, transforms.getTransformBuffer(), VK_SHADER_STAGE_VERTEX_BIT)
-            .addStorageBuffer(2, meshBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addStorageBuffer(1, lights.getLightCountBuffer(), VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addStorageBuffer(2, lights.getLightBuffer(), VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addStorageBuffer(3, transforms.getTransformBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addStorageBuffer(4, meshBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .build();
         }
 
@@ -245,18 +250,9 @@ namespace Lu{
             });
         }
 
-        void zeroOut(uint32_t frameIndex, const Command& cmd){
-            vkCmdFillBuffer(
-                cmd.vkCommandBuffer,
-                drawCountBuffer.getVkBuffer(frameIndex),
-                0,
-                VK_WHOLE_SIZE,
-                0
-            );
-        }
-
-
         void copy(uint32_t frameIndex, const Command& cmd) {
+            zeroOut(frameIndex, cmd);
+        
             if ((instanceBufferSize = instanceBuffer.sizeCpu(frameIndex)) == 0) {
                 return;
             }
@@ -384,6 +380,16 @@ namespace Lu{
             std::array<std::shared_ptr<IBufferResource>, MAX_MESH_PIPELINES> buffers;
             buffers.fill(initDummyIndirectBuffer());
             return buffers;
+        }
+
+        void zeroOut(uint32_t frameIndex, const Command& cmd){
+            vkCmdFillBuffer(
+                cmd.vkCommandBuffer,
+                drawCountBuffer.getVkBuffer(frameIndex),
+                0,
+                VK_WHOLE_SIZE,
+                0
+            );
         }
 
         void recordBarrier(

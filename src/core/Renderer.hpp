@@ -6,6 +6,7 @@
 #include "CameraPackage.hpp"
 #include "TransformPackage.hpp"
 #include "GeometryPackage.hpp"
+#include "LightPackage.hpp"
 #include "MeshPackage.hpp"
 #include "MultiMeshPackage.hpp"
 #include "Channel.hpp"
@@ -42,6 +43,7 @@ namespace Lu{
           
             CameraPackage camera;
             TransformPackage transform;            
+            LightPackage lights;
             GeometryPackage<Vertex::Mesh> meshGeometry;
             MeshPackage mesh;
             MultiMeshPackage multiMesh;

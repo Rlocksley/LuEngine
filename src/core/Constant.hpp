@@ -21,6 +21,7 @@ namespace Lu{
         const uint32_t MAX_MULTI_MESH_INSTANCES = 10000;
         const uint32_t MAX_MULTI_MESH_UPLOAD_INSTANCES =
             MAX_MULTI_MESH_INSTANCES * MAX_FRAMES_IN_FLIGHT;
+        const uint32_t MAX_LIGHTS = 1024;
 
     }
 }

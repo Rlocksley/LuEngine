@@ -5,6 +5,7 @@
 #include "component/Transform.hpp"
 #include "component/Material.hpp"
 #include "component/MultiMesh.hpp"
+#include "component/Light.hpp"
 #include "CameraData.hpp"
 
 namespace Lu{
@@ -51,11 +52,21 @@ namespace Lu{
             flecs::entity_t entity;            
         };
 
+        struct CreateLight{
+            flecs::entity_t parent;
+            flecs::entity_t entity;
+            Component::Light light;
+        };
+
+        struct DestroyLight{
+            flecs::entity_t entity;
+        };
+
         struct UpdateCamera{
             CameraData cameraData;
         };
 
-        using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, UpdateCamera>;
+        using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera>;
 
     }
 

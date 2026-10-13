@@ -8,8 +8,9 @@
 #include "Renderer.hpp"
 #include "modul/TransformGpuModule.hpp"
 #include "modul/MultiMeshGpuModule.hpp"
-#include "PipelineConfig.hpp"
+#include "modul/LightModule.hpp"
 #include "component/InputState.hpp"
+#include "PipelineConfig.hpp"
 #include "Exit.hpp"
 
 namespace Lu{
@@ -110,6 +111,7 @@ namespace Lu{
             world->import<Module::Mesh>();
             world->import<Module::MultiMeshGpu>();
             world->import<Module::Material>();
+            world->import<Module::Light>();
             world->import<Module::InputState>();
 
             #ifdef LU_DEBUG

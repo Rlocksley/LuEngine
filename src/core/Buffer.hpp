@@ -314,7 +314,7 @@ namespace Lu
         class BufferGpuIndexed final : public IBufferResource {
         public:
                         explicit BufferGpuIndexed(uint32_t size, VkBufferUsageFlags usage)
-                                : uploadBuffer(1, VK_BUFFER_USAGE_TRANSFER_SRC_BIT), 
+                                : uploadBuffer(1, VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
                                   buffer(size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
                                   capacity(size) {}
 
@@ -338,6 +338,20 @@ namespace Lu
                 copy.dstOffset = static_cast<VkDeviceSize>(index) * sizeof(T);
                 copy.size = sizeof(T);
                 vkCmdCopyBuffer(command.vkCommandBuffer, uploadBuffer.vkBuffer, buffer.vkBuffer, 1, &copy);
+            }
+
+            template<typename Cmd>
+            void recordCopyFrom(const BufferInterface<T>& source, uint32_t sourceOffset,
+                uint32_t index, uint32_t count, const Cmd& command) {
+                LU_ASSERT(count > 0 && sourceOffset <= source.size &&
+                    count <= source.size - sourceOffset &&
+                    index <= capacity && count <= capacity - index,
+                    "BufferGpuIndexed", "recordCopyFrom", "Copy range exceeds buffer capacity.")
+                VkBufferCopy copy{};
+                copy.srcOffset = static_cast<VkDeviceSize>(sourceOffset) * sizeof(T);
+                copy.dstOffset = static_cast<VkDeviceSize>(index) * sizeof(T);
+                copy.size = static_cast<VkDeviceSize>(count) * sizeof(T);
+                vkCmdCopyBuffer(command.vkCommandBuffer, source.vkBuffer, buffer.vkBuffer, 1, &copy);
             }
 
         private:
