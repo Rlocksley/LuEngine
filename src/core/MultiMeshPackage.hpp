@@ -516,6 +516,7 @@ namespace Lu{
                 command.end();
                 command.submit();
                 command.waitForFence();
+                command.resetFence();
             }
 
             void createIndirectCommandsLayout(MultiMeshComputePipeId pipeId){

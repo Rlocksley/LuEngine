@@ -1,5 +1,6 @@
 #include "Core.hpp"
 #include "Image.hpp"
+#include "Texture.hpp"
 
 namespace Lu
 {
@@ -22,13 +23,14 @@ namespace Core
        
         createSwapchain();
         createFramebuffers();
-
+        createDepthMap();
     }
 
     void destroyCore()
     {
         vkDeviceWaitIdle(vkDevice);
-    
+
+        destroyDepthMap();
         destroyFramebuffers();
         destroySwapchain();
 
@@ -68,12 +70,20 @@ namespace Core
         windowWidth = static_cast<uint32_t>(width);
         windowHeight = static_cast<uint32_t>(height);
 
-        LU_CHECK_VULKAN(vkDeviceWaitIdle(vkDevice), "recreateSwapchain", "vkDeviceWaitIdle")
+        LU_CHECK_VULKAN
+        (vkDeviceWaitIdle(vkDevice), 
+        "recreateSwapchain", 
+        "vkDeviceWaitIdle")
+        
+        destroyDepthMap();
         destroyFramebuffers();
         destroySwapchain();
+        
         refreshSurfaceState();
+        
         createSwapchain();
         createFramebuffers();
+        createDepthMap();
     }
                                     
 }

@@ -5,6 +5,7 @@
 #include "Swapchain.hpp"
 #include "Framebuffers.hpp"
 #include "Exit.hpp"
+#include "Texture.hpp"
 
 namespace Lu{
     namespace Core{
@@ -12,6 +13,7 @@ namespace Lu{
             : command{},
             camera(),
             transform(),
+            lights(camera, transform),
             meshGeometry(
                 MAX_MESH_VERTEX_BUFFER_SIZE,
                 MAX_MESH_INDEX_BUFFER_SIZE,
@@ -165,6 +167,14 @@ namespace Lu{
         }
 
         void Renderer::record(){
+            if (depthMapView != depthMap.vkImageView ||
+                depthMapExtent.width != depthMap.width ||
+                depthMapExtent.height != depthMap.height) {
+                lights.updateDepthMapDescriptorSet();
+                depthMapView = depthMap.vkImageView;
+                depthMapExtent = {depthMap.width, depthMap.height};
+                depthMapInitialized = false;
+            }
             
             const auto& cmd = command[frameIndex];
 
@@ -208,6 +218,22 @@ namespace Lu{
             //Pipeline Barrier
             cullBarrier(cmd);
 
+            // Render mesh depth for tile light culling.
+            beginDepthRendering(cmd);
+            mesh.depth(frameIndex, meshGeometry, cmd);
+            endDepthRendering(cmd);
+
+            // Cull lights against the depth prepass.
+            lights.cull(frameIndex, cmd);
+
+            recordBarrier(
+                cmd.vkCommandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_ACCESS_SHADER_WRITE_BIT,
+                VK_ACCESS_SHADER_READ_BIT
+            );
+
             //begin dynamic rendering
             beginRendering(cmd);
 
@@ -220,6 +246,79 @@ namespace Lu{
 
             //end command buffer recording
             cmd.end();
+        }
+
+        void Renderer::beginDepthRendering(const Command& cmd) {
+            VkImageMemoryBarrier depthBarrier{};
+            depthBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            depthBarrier.srcAccessMask = depthMapInitialized ? VK_ACCESS_SHADER_READ_BIT : 0;
+            depthBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            depthBarrier.oldLayout = depthMapInitialized
+                ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+                : VK_IMAGE_LAYOUT_UNDEFINED;
+            depthBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            depthBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            depthBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            depthBarrier.image = depthMap.vkImage;
+            depthBarrier.subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+
+            vkCmdPipelineBarrier(
+                cmd.vkCommandBuffer,
+                depthMapInitialized
+                    ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+                    : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                    VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &depthBarrier
+            );
+
+            VkRenderingAttachmentInfo depthAttachment{};
+            depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+            depthAttachment.imageView = depthMap.vkImageView;
+            depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+            depthAttachment.clearValue.depthStencil = {1.0f, 0};
+
+            VkRenderingInfo renderingInfo{};
+            renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+            renderingInfo.renderArea.offset = {0, 0};
+            renderingInfo.renderArea.extent = vkExtent2D;
+            renderingInfo.layerCount = 1;
+            renderingInfo.pDepthAttachment = &depthAttachment;
+
+            vkCmdBeginRendering(cmd.vkCommandBuffer, &renderingInfo);
+            depthMapInitialized = true;
+        }
+
+        void Renderer::endDepthRendering(const Command& cmd) {
+            vkCmdEndRendering(cmd.vkCommandBuffer);
+
+            VkImageMemoryBarrier depthBarrier{};
+            depthBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            depthBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            depthBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            depthBarrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            depthBarrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+            depthBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            depthBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            depthBarrier.image = depthMap.vkImage;
+            depthBarrier.subresourceRange = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+
+            vkCmdPipelineBarrier(
+                cmd.vkCommandBuffer,
+                VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+                    VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0,
+                0, nullptr,
+                0, nullptr,
+                1, &depthBarrier
+            );
         }
 
         VkResult Renderer::submit(){
@@ -383,6 +482,7 @@ namespace Lu{
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
                     VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
                     VK_PIPELINE_STAGE_COMMAND_PREPROCESS_BIT_EXT,
                 VK_ACCESS_SHADER_WRITE_BIT,
                 VK_ACCESS_INDIRECT_COMMAND_READ_BIT |

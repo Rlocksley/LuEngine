@@ -329,8 +329,8 @@ namespace Lu
             glfwGetFramebufferSize
             (pGLFWwindow, &width, &height);
 
-            vkExtent2D.width = (uint32_t)width;
-            vkExtent2D.height = (uint32_t)height;
+            vkExtent2D.width = static_cast<uint32_t>(width);
+            vkExtent2D.height = static_cast<uint32_t>(height);
 
             vkExtent2D.width =
             clamp(vkExtent2D.width,

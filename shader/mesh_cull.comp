@@ -97,6 +97,14 @@ layout(set = 0, binding = 6) writeonly buffer IndirectDrawCommandBuffer {
     DrawIndexedIndirectCommand commands[];
 } indirectBuffers[];
 
+layout(set = 0, binding = 7) writeonly buffer DepthIndirectDrawCommandBuffer {
+    DrawIndexedIndirectCommand commands[];
+} indirectBufferDepth;
+
+layout(set = 0, binding = 8) buffer DepthDrawCountBuffer {
+    uint count;
+} depthDrawCount;
+
 // ------------------------------------------------------------------
 // Helper Functions
 // ------------------------------------------------------------------
@@ -149,13 +157,18 @@ void main() {
     //Frustum Cull with World Sphere
     if (isVisible(vec4(worldCenter, worldRadius))) {
 
-        // 5. Build the Draw Command (shared by both paths)
+        // Every visible mesh contributes to the depth prepass, regardless of pipeline.
         DrawIndexedIndirectCommand cmd;
         cmd.indexCount    = meshInfo.indexCount;
         cmd.instanceCount = 1;             
         cmd.firstIndex    = meshInfo.firstIndex;
         cmd.vertexOffset  = meshInfo.vertexOffset;
         cmd.firstInstance = gID;           // Pass global ID to Vertex Shader (gl_InstanceIndex)
+
+        uint depthCmdIndex = atomicAdd(depthDrawCount.count, 1);
+        if (depthCmdIndex < indirectBufferDepth.commands.length()) {
+            indirectBufferDepth.commands[depthCmdIndex] = cmd;
+        }
 
         uint shaderIndex = mesh.pipelineId; 
         uint cmdIndex = 0;

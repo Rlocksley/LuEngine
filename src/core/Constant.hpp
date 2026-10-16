@@ -20,8 +20,18 @@ namespace Lu{
         const uint32_t MAX_MULTI_MESH_COMPUTE_PIPELINES = 256;
         const uint32_t MAX_MULTI_MESH_INSTANCES = 10000;
         const uint32_t MAX_MULTI_MESH_UPLOAD_INSTANCES =
-            MAX_MULTI_MESH_INSTANCES * MAX_FRAMES_IN_FLIGHT;
+                        MAX_MULTI_MESH_INSTANCES * 
+                        MAX_ECS_REQUEST_CREATE_MULTI_MESH_PER_FRAME * //check if this is correct 
+                        MAX_FRAMES_IN_FLIGHT;
         const uint32_t MAX_LIGHTS = 1024;
 
+
+        //careful: 
+        //for this constants 
+        //you also have to change 
+        //the constants in the shaders
+        const uint32_t TILE_WIDTH = 16;
+        const uint32_t TILE_HEIGHT = 16;
+        const uint32_t MAX_LIGHTS_PER_TILE = 60;
     }
 }

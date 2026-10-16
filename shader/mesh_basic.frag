@@ -58,7 +58,7 @@ layout(set = 0, binding = 0) uniform CameraBuffer {
     float time;
 } camera;
 
-layout(set = 0, binding = 1) readonly buffer LightCountBuffer {
+layout(set = 0, binding = 1) uniform LightCountBuffer {
     uint count;
 } lightCountBuffer;
 
@@ -66,13 +66,21 @@ layout(set = 0, binding = 2) readonly buffer LightBuffer {
     Light lights[];
 } lightBuffer;
 
-layout(set = 0, binding = 3) readonly buffer TransformBuffer {
+layout(set = 0, binding = 3) readonly buffer LightIndicesBuffer {
+    uint lightIndices[];
+} tileLightIndices;
+
+layout(set = 0, binding = 4) readonly buffer TransformBuffer {
     Transform transforms[];
 } transforms;
 
-layout(set = 0, binding = 4) readonly buffer MeshBuffer {
+layout(set = 0, binding = 5) readonly buffer MeshBuffer {
     Mesh meshes[];
 } meshes;
+
+#define TILE_WIDTH 16u
+#define TILE_HEIGHT 16u
+#define MAX_LIGHTS_PER_TILE 60u
 
 vec3 evaluateLight(Light light, vec3 normal, vec3 viewDirection, float roughness) {
     Transform lightTransform = transforms.transforms[light.transformId];
@@ -119,9 +127,24 @@ void main() {
     vec3 viewDirection = normalize(camera.camPos.xyz - inWorldPos);
     vec3 lighting = material.ambient.rgb;
 
-    for (uint index = 0; index < lightCountBuffer.count; ++index) {
+    uint px = uint(gl_FragCoord.x);
+    uint py = uint(gl_FragCoord.y);
+    uint tilesX = (uint(camera.screenSize.x) + TILE_WIDTH - 1u) / TILE_WIDTH;
+    uint tileX = px / TILE_WIDTH;
+    uint tileY = py / TILE_HEIGHT;
+    uint tileIndex = tileY * tilesX + tileX;
+    uint entriesPerTile = MAX_LIGHTS_PER_TILE + 1u;
+    uint base = tileIndex * entriesPerTile;
+    uint count = min(tileLightIndices.lightIndices[base], MAX_LIGHTS_PER_TILE);
+
+    for (uint index = 0u; index < count; ++index) {
+        uint lightIndex = tileLightIndices.lightIndices[base + 1u + index];
+        if (lightIndex >= lightCountBuffer.count ||
+            lightBuffer.lights[lightIndex].transformId >= transforms.transforms.length()) {
+            continue;
+        }
         lighting += evaluateLight(
-            lightBuffer.lights[index], normal, viewDirection, material.roughness);
+            lightBuffer.lights[lightIndex], normal, viewDirection, material.roughness);
     }
 
     vec3 albedo = inColor.rgb * material.albedo.rgb;

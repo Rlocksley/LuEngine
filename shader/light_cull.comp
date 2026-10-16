@@ -1,0 +1,175 @@
+#version 460
+
+#define TILE_WIDTH 16
+#define TILE_HEIGHT 16
+#define MAX_LIGHTS_PER_TILE 60
+
+layout(local_size_x = TILE_WIDTH, local_size_y = TILE_HEIGHT, local_size_z = 1) in;
+
+struct Light {
+    vec4 color;
+    vec4 params;
+    uint type;
+    uint transformId;
+    uint pad0;
+    uint pad1;
+};
+
+struct Transform {
+    mat4 model;
+    mat4 normal;
+    vec4 scale;
+    vec4 rotation;
+    vec4 position;
+};
+
+layout(set = 0, binding = 0) uniform CameraBuffer {
+    vec4 frustumPlanes[6];
+    mat4 projection;
+    mat4 view;
+    mat4 viewProjection;
+    mat4 inverseProjection;
+    vec4 camPos;
+    vec4 camDir;
+    vec2 screenSize;
+    float nearClip;
+    float farClip;
+    float deltaTime;
+    float time;
+} camera;
+
+layout(set = 0, binding = 1) uniform LightCountBuffer {
+    uint count;
+} lightCountBuffer;
+
+layout(set = 0, binding = 2) readonly buffer LightBuffer {
+    Light lights[];
+} lightData;
+
+layout(set = 0, binding = 3) writeonly buffer TileLightIndices {
+    uint lightIndices[];
+} tileLightIndices;
+
+layout(set = 0, binding = 4) uniform sampler2D depthMap;
+
+layout(set = 0, binding = 5) readonly buffer TransformBuffer {
+    Transform transforms[];
+} transforms;
+
+shared uint s_MinDepthUint;
+shared uint s_MaxDepthUint;
+shared float s_MinDepthView;
+shared float s_MaxDepthView;
+shared vec4 s_FrustumPlanes[4];
+shared uint s_TileLightCount;
+shared uint s_TileLightList[MAX_LIGHTS_PER_TILE];
+
+float clipToViewZ(float depth) {
+    vec4 viewPosition = camera.inverseProjection * vec4(0.0, 0.0, depth, 1.0);
+    return viewPosition.z / viewPosition.w;
+}
+
+vec3 screenToView(vec2 uv) {
+    vec2 ndc = uv * 2.0 - 1.0;
+    vec4 viewPosition = camera.inverseProjection * vec4(ndc, 1.0, 1.0);
+    return viewPosition.xyz / viewPosition.w;
+}
+
+vec4 makePlane(vec3 a, vec3 b, vec3 c) {
+    vec3 normal = normalize(cross(b - a, c - a));
+    return vec4(normal, -dot(normal, a));
+}
+
+void main() {
+    ivec2 pixelPosition = ivec2(gl_GlobalInvocationID.xy);
+    uint threadIndex = gl_LocalInvocationIndex;
+    uint threadCount = uint(gl_WorkGroupSize.x * gl_WorkGroupSize.y);
+
+    if (threadIndex == 0u) {
+        s_MinDepthUint = 0xffffffffu;
+        s_MaxDepthUint = 0u;
+        s_TileLightCount = 0u;
+    }
+    barrier();
+
+    float depth = 1.0;
+    if (pixelPosition.x < int(camera.screenSize.x) &&
+        pixelPosition.y < int(camera.screenSize.y)) {
+        depth = texelFetch(depthMap, pixelPosition, 0).r;
+    }
+    uint depthUint = floatBitsToUint(depth);
+    atomicMin(s_MinDepthUint, depthUint);
+    atomicMax(s_MaxDepthUint, depthUint);
+    barrier();
+
+    if (threadIndex == 0u) {
+        float depth0 = clipToViewZ(uintBitsToFloat(s_MinDepthUint));
+        float depth1 = clipToViewZ(uintBitsToFloat(s_MaxDepthUint));
+        s_MinDepthView = min(depth0, depth1);
+        s_MaxDepthView = max(depth0, depth1);
+
+        vec2 tileId = vec2(gl_WorkGroupID.xy);
+        vec2 tileSize = vec2(gl_WorkGroupSize.xy);
+        vec2 uvMin = tileId * tileSize / camera.screenSize;
+        vec2 uvMax = (tileId + vec2(1.0)) * tileSize / camera.screenSize;
+
+        vec3 viewBL = screenToView(vec2(uvMin.x, uvMin.y));
+        vec3 viewBR = screenToView(vec2(uvMax.x, uvMin.y));
+        vec3 viewTL = screenToView(vec2(uvMin.x, uvMax.y));
+        vec3 viewTR = screenToView(vec2(uvMax.x, uvMax.y));
+        vec3 eye = vec3(0.0);
+
+        s_FrustumPlanes[0] = makePlane(eye, viewTL, viewBL);
+        s_FrustumPlanes[1] = makePlane(eye, viewBR, viewTR);
+        s_FrustumPlanes[2] = makePlane(eye, viewTR, viewTL);
+        s_FrustumPlanes[3] = makePlane(eye, viewBL, viewBR);
+    }
+    barrier();
+
+    uint passCount = (lightCountBuffer.count + threadCount - 1u) / threadCount;
+    for (uint pass = 0u; pass < passCount; ++pass) {
+        uint lightIndex = pass * threadCount + threadIndex;
+        if (lightIndex >= lightCountBuffer.count) {
+            continue;
+        }
+
+        Light light = lightData.lights[lightIndex];
+        if (light.transformId >= transforms.transforms.length()) {
+            continue;
+        }
+
+        bool visible = light.type == 2u;
+        if (!visible) {
+            Transform lightTransform = transforms.transforms[light.transformId];
+            vec3 center = (camera.view * vec4(lightTransform.position.xyz, 1.0)).xyz;
+            float radius = light.params.x;
+
+            visible = !(center.z - radius > s_MaxDepthView ||
+                center.z + radius < s_MinDepthView);
+            for (int planeIndex = 0; visible && planeIndex < 4; ++planeIndex) {
+                visible = dot(s_FrustumPlanes[planeIndex].xyz, center) +
+                    s_FrustumPlanes[planeIndex].w >= -radius;
+            }
+        }
+
+        if (visible) {
+            uint slot = atomicAdd(s_TileLightCount, 1u);
+            if (slot < MAX_LIGHTS_PER_TILE) {
+                s_TileLightList[slot] = lightIndex;
+            }
+        }
+    }
+    barrier();
+
+    uint finalCount = min(s_TileLightCount, uint(MAX_LIGHTS_PER_TILE));
+    uint tilesX = (uint(camera.screenSize.x) + uint(TILE_WIDTH) - 1u) / uint(TILE_WIDTH);
+    uint tileIndex = gl_WorkGroupID.y * tilesX + gl_WorkGroupID.x;
+    uint tileBase = tileIndex * (uint(MAX_LIGHTS_PER_TILE) + 1u);
+
+    if (threadIndex == 0u) {
+        tileLightIndices.lightIndices[tileBase] = finalCount;
+    }
+    for (uint index = threadIndex; index < finalCount; index += threadCount) {
+        tileLightIndices.lightIndices[tileBase + 1u + index] = s_TileLightList[index];
+    }
+}

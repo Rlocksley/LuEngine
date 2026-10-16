@@ -80,6 +80,7 @@ namespace Lu {
 
                 explicit TextureDescriptorResource(const Texture& value) : texture(&value) {}
                 explicit TextureDescriptorResource(const std::array<std::unique_ptr<Texture>, Size>& values) : textures(&values) {}
+                
 
                 VkBuffer getVkBuffer(uint32_t, uint32_t) const override { 
                     LU_LOGE("TextureDescriptorResource", "getVkBuffer", "Function must not be called");
@@ -96,7 +97,7 @@ namespace Lu {
                         selectedTexture = (*textures)[arrayIndex].get();
                     }
                     LU_ASSERT(selectedTexture != nullptr, "DescriptorSetBase", "getVkDescriptorImageInfo", "Texture resource is null.")
-                    return {selectedTexture->vkSampler, selectedTexture->vkImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+                    return {selectedTexture->vkSampler, selectedTexture->vkImageView, selectedTexture->parameters.sampledLayout};
                 }
             };
 

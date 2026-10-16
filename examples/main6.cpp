@@ -22,13 +22,13 @@ void addCube(flecs::world& world, const std::string& name,
         .add<Lu::Component::TransformGpu>();
 
     world.entity((name + "Mesh").c_str())
-        .child_of(cube)
+        .set(flecs::Parent{cube})
         .set(Lu::Component::Mesh{.mesh = mesh, .pipeline = pipeline})
         .set(Lu::Component::Material{
             .albedo = albedo,
             .ambient = glm::vec4(0.025f, 0.025f, 0.025f, 1.0f),
-            .roughness = 0.45f,
-            .metallic = 0.0f
+            .roughness = 0.01f,
+            .metallic = 0.01f
         });
 }
 
@@ -49,7 +49,7 @@ void addLight(flecs::world& world, const char* name, Lu::LightType type,
         .add<Lu::Component::TransformGpu>();
 
     world.entity(name)
-        .child_of(lightTransform)
+        .set(flecs::Parent{lightTransform})
         .set(Lu::Component::Light{
             .type = type,
             .color = color,
@@ -107,15 +107,15 @@ struct LightingScene {
 
         addLight(world, "SubtleDirectionalLight", Lu::LightType::Directional,
             glm::vec3(-4.0f, 8.0f, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(1.0f), 0.1f, 100.0f);
+            glm::vec3(1.0f), 0.05f, 100.0f);
 
         addLight(world, "WarmPointLight", Lu::LightType::Point,
             glm::vec3(-3.2f, 2.8f, 1.4f), glm::vec3(0.0f),
-            glm::vec3(1.0f, 0.58f, 0.28f), 3.0f, 7.0f);
+            glm::vec3(1.0f, 0.58f, 0.28f), 10.0f, 7.0f);
 
         addLight(world, "CoolSpotLight", Lu::LightType::Spot,
             glm::vec3(3.5f, 6.0f, 0.5f), glm::vec3(3.5f, 0.0f, -1.0f),
-            glm::vec3(0.55f, 0.72f, 1.0f), 4.5f, 10.0f,
+            glm::vec3(0.55f, 0.72f, 1.0f), 12.5f, 10.0f,
             glm::radians(16.0f), glm::radians(24.0f));
     }
 };
@@ -128,7 +128,7 @@ int main() {
             .name = "MeshPipe::Lighting",
             .capacity = 128,
             .vertexShader = "shader/mesh_basic.vert.spv",
-            .fragmentShader = "shader/mesh_basic.frag.spv"
+            .fragmentShader = "shader/mesh_pbr.frag.spv"
         })
         .registerShape<Lu::Shape::Cube>(
             "Mesh::Cube",

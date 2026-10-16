@@ -23,6 +23,8 @@ Framebuffers.cpp
 Global.hpp
 Image.hpp
 Image.cpp
+Texture.hpp
+Texture.cpp
 Input.hpp
 Input.cpp
 Instance.hpp

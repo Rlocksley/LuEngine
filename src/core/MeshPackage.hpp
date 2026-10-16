@@ -25,6 +25,8 @@ namespace Lu{
             
             DualBuffer<MeshInstance> instanceBuffer;
             SlotBuffer<Mesh> meshBuffer;
+            BufferGpu<VkDrawIndexedIndirectCommand> indirectBufferDepth;
+            BufferGpu<uint32_t> depthCountBuffer;
             std::array<std::shared_ptr<IBufferResource>, MAX_MESH_PIPELINES> indirectBufferArray;
             BufferGpu<uint32_t> drawCountBuffer;
             BufferGpuIndexed<uint32_t> capacityBuffer;
@@ -33,6 +35,8 @@ namespace Lu{
             ComputePipeline transferPipe;
             DescriptorSet cullDescrSet;
             ComputePipeline cullPipe;
+            DescriptorSet depthDescrSet;
+            GraphicsPipeline<Vertex::Mesh> depthPipe;
             DescriptorSet meshDescrSet;
             uint32_t pipeArraySize{0};
             std::array<uint32_t, MAX_MESH_PIPELINES> indirectDrawCapacity{};
@@ -59,9 +63,11 @@ namespace Lu{
             const LightPackage& lights, const GeometryPackage<Vertex::Mesh>& geometry)
             : instanceBuffer(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME*MAX_FRAMES_IN_FLIGHT, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
             meshBuffer(MAX_MESHES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+            indirectBufferDepth(MAX_MESHES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
+            depthCountBuffer(1, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
             indirectBufferArray(initIndirectBufferArray()),
             drawCountBuffer(MAX_MESH_PIPELINES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
-            capacityBuffer(MAX_MESH_PIPELINES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
+            capacityBuffer(MAX_MESH_PIPELINES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
             command()
         {
             command.begin();
@@ -84,9 +90,11 @@ namespace Lu{
             command.end();
             command.submit();
             command.waitForFence();
+            command.resetFence();
 
             createTransferPipe();
             createCullPipe(camera, transforms, geometry);
+            createDepthPipe(camera, transforms);
             createMeshDescriptorSet(camera, transforms, lights);
         }
 
@@ -125,6 +133,8 @@ namespace Lu{
             .addStorageBuffer(4, drawCountBuffer, VK_SHADER_STAGE_COMPUTE_BIT)
             .addStorageBuffer(5, capacityBuffer, VK_SHADER_STAGE_COMPUTE_BIT)
             .addStorageBufferArray(6, indirectBufferArray, VK_SHADER_STAGE_COMPUTE_BIT)
+            .addStorageBuffer(7, indirectBufferDepth, VK_SHADER_STAGE_COMPUTE_BIT)
+            .addStorageBuffer(8, depthCountBuffer, VK_SHADER_STAGE_COMPUTE_BIT)
             .build();
 
             cullPipe.create(
@@ -136,23 +146,44 @@ namespace Lu{
             );
         }
 
+        void createDepthPipe(const CameraPackage& camera, const TransformPackage& transforms) {
+            depthDescrSet
+            .addUniformBuffer(0, camera.getCameraBuffer(), VK_SHADER_STAGE_VERTEX_BIT)
+            .addStorageBuffer(1, transforms.getTransformBuffer(), VK_SHADER_STAGE_VERTEX_BIT)
+            .addStorageBuffer(2, meshBuffer, VK_SHADER_STAGE_VERTEX_BIT)
+            .build();
+
+            depthPipe.create(
+                depthDescrSet.getVkPipelineLayout(),
+                true/*depthVertexMode*/,
+                GraphicsPipelineConfig{
+                    .name = "mesh_depth",
+                    .capacity = MAX_MESHES/*not used*/,
+                    .vertexShader = "shader/mesh_depth.vert.spv",
+                    .depthBiasConstantFactor = 1.25f,
+                    .depthBiasClamp = 0.0f,
+                    .depthBiasSlopeFactor = 1.75f,
+                    .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+                    .minSampleShading = 1.0f,
+                    .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+                    .minDepthBounds = 0.0f,
+                    .maxDepthBounds = 1.0f,
+                    .hasColorAttachments = false,
+                    .depthAttachmentFormat = depthVkFormat
+                }
+            );
+        }
+
         void createMeshDescriptorSet(const CameraPackage& camera,
             const TransformPackage& transforms, const LightPackage& lights){
             meshDescrSet
             .addUniformBuffer(0, camera.getCameraBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-            .addStorageBuffer(1, lights.getLightCountBuffer(), VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addUniformBuffer(1, lights.getLightCountBuffer(), VK_SHADER_STAGE_FRAGMENT_BIT)
             .addStorageBuffer(2, lights.getLightBuffer(), VK_SHADER_STAGE_FRAGMENT_BIT)
-            .addStorageBuffer(3, transforms.getTransformBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
-            .addStorageBuffer(4, meshBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addStorageBuffer(3, lights.getLightIndicesBuffer(), VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addStorageBuffer(4, transforms.getTransformBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addStorageBuffer(5, meshBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .build();
-        }
-
-        void createTransferPipeline(const ComputePipelineConfig& config) {
-            transferPipe.create(transferDescrSet.getVkPipelineLayout(), config);
-        }
-
-        void createCullPipeline(const ComputePipelineConfig& config) {
-            cullPipe.create(cullDescrSet.getVkPipelineLayout(), config);
         }
 
         void createMeshPipeline(const MeshPipeEntity entity, const GraphicsPipelineConfig& config) {
@@ -178,6 +209,7 @@ namespace Lu{
             command.end();
             command.submit();
             command.waitForFence();
+            command.resetFence();
 
             entityToPipeId[entity] = pipeId;
             meshPipes[pipeId].create(
@@ -324,6 +356,42 @@ namespace Lu{
             );
         }
 
+        void depth(const uint32_t frameIndex, const GeometryPackage<Vertex::Mesh>& geometry, const Command& command) const {
+            
+            vkCmdBindPipeline(
+                command.vkCommandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                depthPipe.getVkPipeline()
+            );
+
+            vkCmdBindDescriptorSets(
+                command.vkCommandBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                depthDescrSet.getVkPipelineLayout(),
+                0,
+                1,
+                &depthDescrSet.getVkDescriptorSet(frameIndex),
+                0,
+                nullptr
+            );
+
+            const VkBuffer vertexBuffer = geometry.getVertexBuffer();
+            const VkBuffer indexBuffer = geometry.getIndexBuffer();
+            VkDeviceSize offsets[] = {0};
+
+            vkCmdBindVertexBuffers(command.vkCommandBuffer, 0, 1, &vertexBuffer, offsets);
+            vkCmdBindIndexBuffer(command.vkCommandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            vkCmdDrawIndexedIndirectCount(
+                command.vkCommandBuffer,
+                indirectBufferDepth.getVkBuffer(frameIndex),
+                0,
+                depthCountBuffer.getVkBuffer(frameIndex),
+                0,
+                meshBuffer.size(),
+                sizeof(VkDrawIndexedIndirectCommand)
+            );
+        }
 
         void draw(const uint32_t frameIndex, const GeometryPackage<Vertex::Mesh>& geometry, const Command& command) const {
             const VkBuffer vertexBuffer = geometry.getVertexBuffer();
@@ -386,6 +454,13 @@ namespace Lu{
             vkCmdFillBuffer(
                 cmd.vkCommandBuffer,
                 drawCountBuffer.getVkBuffer(frameIndex),
+                0,
+                VK_WHOLE_SIZE,
+                0
+            );
+            vkCmdFillBuffer(
+                cmd.vkCommandBuffer,
+                depthCountBuffer.getVkBuffer(frameIndex),
                 0,
                 VK_WHOLE_SIZE,
                 0

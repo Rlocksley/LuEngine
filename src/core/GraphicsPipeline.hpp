@@ -53,9 +53,9 @@ namespace Lu{
 
 			std::vector<VkVertexInputAttributeDescription> vertexInputAttributes{};
 			if(depthVertexMode){
-                    vertexInputAttributes = Vertex::getDepthAttributeDescriptions();
+                vertexInputAttributes = Vertex::getDepthAttributeDescriptions();
 			}else{
-                    vertexInputAttributes = Vertex::getAttributeDescriptions();
+                vertexInputAttributes = Vertex::getAttributeDescriptions();
 			}
 
 			const bool hasVertexBinding = (vertexInputBinding.stride > 0);
@@ -114,27 +114,6 @@ namespace Lu{
 			depthStencilStateCreateInfo.maxDepthBounds = config.maxDepthBounds;
 			depthStencilStateCreateInfo.stencilTestEnable = VK_FALSE;
 
-			VkPipelineColorBlendAttachmentState colorBlendAttachmentState{};
-			colorBlendAttachmentState.colorWriteMask =
-				VK_COLOR_COMPONENT_R_BIT |
-				VK_COLOR_COMPONENT_G_BIT |
-				VK_COLOR_COMPONENT_B_BIT |
-				VK_COLOR_COMPONENT_A_BIT;
-			colorBlendAttachmentState.blendEnable = config.blendEnable ? VK_TRUE : VK_FALSE;
-			colorBlendAttachmentState.srcColorBlendFactor = config.srcColorBlendFactor;
-			colorBlendAttachmentState.dstColorBlendFactor = config.dstColorBlendFactor;
-			colorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
-			colorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-			colorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-			colorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
-
-			VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo{};
-			colorBlendStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-			colorBlendStateCreateInfo.logicOpEnable = VK_FALSE;
-			colorBlendStateCreateInfo.logicOp = VK_LOGIC_OP_COPY;
-			colorBlendStateCreateInfo.attachmentCount = 1;
-			colorBlendStateCreateInfo.pAttachments = &colorBlendAttachmentState;
-
 			VkPipelineRenderingCreateInfo renderingInfo{};
 			renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 			// Determine color attachment formats and count
@@ -155,6 +134,32 @@ namespace Lu{
 			renderingInfo.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
 			renderingInfo.viewMask = config.viewMask;
 
+			VkPipelineColorBlendAttachmentState colorBlendAttachmentState{};
+			colorBlendAttachmentState.colorWriteMask =
+				VK_COLOR_COMPONENT_R_BIT |
+				VK_COLOR_COMPONENT_G_BIT |
+				VK_COLOR_COMPONENT_B_BIT |
+				VK_COLOR_COMPONENT_A_BIT;
+			colorBlendAttachmentState.blendEnable = config.blendEnable ? VK_TRUE : VK_FALSE;
+			colorBlendAttachmentState.srcColorBlendFactor = config.srcColorBlendFactor;
+			colorBlendAttachmentState.dstColorBlendFactor = config.dstColorBlendFactor;
+			colorBlendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			colorBlendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+
+			std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachments(
+				colorCount, colorBlendAttachmentState);
+			VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo{};
+			colorBlendStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			colorBlendStateCreateInfo.logicOpEnable = VK_FALSE;
+			colorBlendStateCreateInfo.logicOp = VK_LOGIC_OP_COPY;
+			colorBlendStateCreateInfo.attachmentCount = colorCount;
+			colorBlendStateCreateInfo.pAttachments = colorBlendAttachments.empty()
+				? nullptr
+				: colorBlendAttachments.data();
+
+			
 			VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo{};
 			graphicsPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 			graphicsPipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());

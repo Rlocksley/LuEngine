@@ -39,6 +39,9 @@ namespace Lu{
             
             uint32_t frameIndex{0};
             std::array<Lu::Core::Command, MAX_FRAMES_IN_FLIGHT> command;
+            VkImageView depthMapView{VK_NULL_HANDLE};
+            VkExtent2D depthMapExtent{};
+            bool depthMapInitialized{false};
                         
           
             CameraPackage camera;
@@ -51,6 +54,8 @@ namespace Lu{
 
             static void beginRendering(const Command& cmd);
             static void endRendering(const Command& cmd);
+            void beginDepthRendering(const Command& cmd);
+            void endDepthRendering(const Command& cmd);
             
             static void copyBarrier(const Command& cmd);
             static void transferBarrier(const Command& cmd);
