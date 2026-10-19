@@ -6,7 +6,7 @@
 #include "Framebuffers.hpp"
 #include "Exit.hpp"
 #include "Texture.hpp"
-
+#include "instance/MaterialInstance.hpp"
 namespace Lu{
     namespace Core{
         Renderer::Renderer()
@@ -21,7 +21,8 @@ namespace Lu{
                 MAX_INDICES_PER_MESH,
                 MAX_MESH_INFOS
             ),
-            mesh(camera, transform, lights, meshGeometry),
+            texture(),
+            mesh(camera, lights, transform, texture, meshGeometry),
             multiMesh(camera, transform, meshGeometry) {
         }
 
@@ -86,6 +87,10 @@ namespace Lu{
             multiMesh.createComputePipeline(entity, config);
         }
 
+        void Renderer::createTexture(const TextureEntity entity, const std::string& filePath){
+            texture.createTexture(entity, filePath);
+            mesh.updateDescriptorSetWrites();
+        }
         
         void Renderer::processEcsRequests(){
             auto vecEcsRequests = GetChannel().drain(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME);
@@ -101,11 +106,26 @@ namespace Lu{
                         },
                         
                         [&](const EcsRequest::CreateMesh& req){
+                            uint32_t textureIds[4]{UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};
+
+                            for(uint32_t i = 0; i < req.material.numberTextures; i++){
+                                textureIds[i] = texture.getTextureId(req.material.textures[i]);    
+                            }
+
+                            Material material(
+                                textureIds, 
+                                req.material.albedo, 
+                                req.material.ambient, 
+                                req.material.emission, 
+                                req.material.roughness, 
+                                req.material.metallic
+                            );
+                     
                             mesh.createMesh(
                                 req.entity, req.pipe,
                                 transform.getTransformId(req.parent),
                                 meshGeometry.getGeometryInfoId(req.mesh),
-                                req.material
+                                material
                             );
                         },
                         
@@ -184,6 +204,7 @@ namespace Lu{
             
             //Copy To GPU
             meshGeometry.copy(frameIndex, cmd);
+            texture.copy(frameIndex, cmd);
             camera.copy(frameIndex, cmd);
             transform.copy(frameIndex, cmd);
             lights.copy(frameIndex, cmd);

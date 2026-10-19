@@ -1,6 +1,5 @@
 #pragma once
 #include "Global.hpp"
-#include "component/Material.hpp"
 
 namespace Lu{
     namespace Core{
@@ -16,13 +15,15 @@ namespace Lu{
 
         Material() = default;
 
-        Material(const Component::Material& comp):
-            texturesIds(comp.texturesIds),
-            albedo(comp.albedo),
-            ambient(comp.ambient),
-            emission(comp.emission),
-            roughness(comp.roughness),
-            metallic(comp.metallic){}
+        Material(const uint32_t textureIds[4], 
+            glm::vec4 albedo, glm::vec4 ambient, glm::vec4 emission, 
+            float roughness, float metallic):
+            texturesIds(texturesIds),
+            albedo(albedo),
+            ambient(ambient),
+            emission(emission),
+            roughness(roughness),
+            metallic(metallic){}
     };
 }
 }

@@ -23,7 +23,8 @@ namespace Lu{
 
             MultiMeshMeshInstance() = default;
             explicit MultiMeshMeshInstance(const Component::MultiMeshInstance& instance)
-                : material(instance.material), transform(instance.transform) {}
+                : material{},//material(instance.material), 
+                transform(instance.transform) {}
         };
 
             struct IndirectDispatch{

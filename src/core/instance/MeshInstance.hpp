@@ -1,6 +1,4 @@
 #include "Global.hpp"
-#include "component/Mesh.hpp"
-#include "component/Material.hpp"
 #include "instance/MaterialInstance.hpp"
 
 namespace Lu{
@@ -15,7 +13,7 @@ namespace Lu{
 
         Mesh() = default;
 
-        Mesh(const Component::Material& material, const uint32_t transformId, 
+        Mesh(const Material& material, const uint32_t transformId, 
              const uint32_t pipelineId, const uint32_t meshInfoId):
             material(material),
             transformId(transformId),

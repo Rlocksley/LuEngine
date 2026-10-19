@@ -48,7 +48,7 @@ struct FireModule {
             Lu::Component::MultiMeshInstance instance{};
             instance.transform.position = glm::vec3(0.0f);
             instance.transform.scale = glm::vec3(0.001f);        // invisible until the first compute pass
-            instance.material.texturesIds = glm::ivec4(static_cast<int>(i), -1, kind, 0);
+            //instance.material.texturesIds = glm::ivec4(static_cast<int>(i), -1, kind, 0);
             instance.material.albedo = glm::vec4(1.0f);
             instance.material.ambient = glm::vec4(0.0f);
             instance.material.emission = glm::vec4(0.0f);        // age = 0, life = 0, seed = 0, clock = 0

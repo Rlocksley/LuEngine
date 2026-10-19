@@ -1,8 +1,6 @@
 #include "Texture.hpp"
 #include "PhysicalDevice.hpp"
 #include "Device.hpp"
-#include "Queue.hpp"
-#include "Buffer.hpp"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
@@ -126,95 +124,51 @@ namespace Lu{
                 "vkCreateSampler")
             }
 
-            void Texture::create(std::shared_ptr<uint8_t[]> pixels){
-                create();
+            void Texture::recordCopy(VkCommandBuffer commandBuffer, VkBuffer sourceBuffer,
+                VkDeviceSize sourceOffset) const {
+                VkImageMemoryBarrier transferBarrier{};
+                transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                transferBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                transferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                transferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                transferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                transferBarrier.image = vkImage;
+                transferBarrier.subresourceRange = {aspect, 0, 1, 0, 1};
 
-                BufferInterface<uint8_t> copyBuffer(
-                    width * height * 4,
-                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-                memcpy(copyBuffer.pMemory, pixels.get(), width * height * 4);
+                vkCmdPipelineBarrier(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    0, 0, nullptr, 0, nullptr, 1, &transferBarrier);
 
-                VkImageMemoryBarrier barrier0;
-                barrier0.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                barrier0.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-                barrier0.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                barrier0.srcAccessMask = 0;
-                barrier0.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                barrier0.image = vkImage;
-                barrier0.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier0.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier0.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                barrier0.subresourceRange.baseMipLevel = 0;
-                barrier0.subresourceRange.levelCount = 1;
-                barrier0.subresourceRange.baseArrayLayer = 0;
-                barrier0.subresourceRange.layerCount = 1;
-                barrier0.pNext = NULL;
+                VkBufferImageCopy copyRegion{};
+                copyRegion.bufferOffset = sourceOffset;
+                copyRegion.imageSubresource = {aspect, 0, 0, 1};
+                copyRegion.imageExtent = {width, height, 1};
+                vkCmdCopyBufferToImage(
+                    commandBuffer,
+                    sourceBuffer,
+                    vkImage,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1,
+                    &copyRegion);
 
-                VkBufferImageCopy copy;
-                copy.bufferOffset = 0;
-                copy.bufferRowLength = 0;
-                copy.bufferImageHeight = 0;
-                copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                copy.imageSubresource.mipLevel = 0;
-                copy.imageSubresource.baseArrayLayer = 0;
-                copy.imageSubresource.layerCount = 1;
-                copy.imageOffset.x = 0;
-                copy.imageOffset.y = 0;
-                copy.imageOffset.z = 0;
-                copy.imageExtent.width = width;
-                copy.imageExtent.height = height;
-                copy.imageExtent.depth = 1;
-
-                VkImageMemoryBarrier barrier1;
-                barrier1.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                barrier1.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                barrier1.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                barrier1.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                barrier1.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                barrier1.image = vkImage;
-                barrier1.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier1.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-                barrier1.subresourceRange.baseMipLevel = 0;
-                barrier1.subresourceRange.levelCount = 1;
-                barrier1.subresourceRange.baseArrayLayer = 0;
-                barrier1.subresourceRange.layerCount = 1;
-                barrier1.pNext = NULL;
-
-                Command command;
-
-                command.begin();
-
-                vkCmdPipelineBarrier
-                (command.vkCommandBuffer,
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                0,
-                0, NULL,
-                0, NULL,
-                1, &barrier0);
-
-                vkCmdCopyBufferToImage
-                (command.vkCommandBuffer,
-                copyBuffer.vkBuffer,
-                vkImage,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                1, &copy);
-
-                vkCmdPipelineBarrier
-                (command.vkCommandBuffer,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                0,
-                0, NULL,
-                0, NULL,
-                1, &barrier1);
-
-                command.end();
-                //TBD add mutext if loading screen is rendering and Texture is uploaded in the backround
-                command.submit();
-                command.waitForFence();
-                command.resetFence();
+                VkImageMemoryBarrier shaderReadBarrier{};
+                shaderReadBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                shaderReadBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                shaderReadBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                shaderReadBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                shaderReadBarrier.newLayout = parameters.sampledLayout;
+                shaderReadBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                shaderReadBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                shaderReadBarrier.image = vkImage;
+                shaderReadBarrier.subresourceRange = {aspect, 0, 1, 0, 1};
+                vkCmdPipelineBarrier(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    0, 0, nullptr, 0, nullptr, 1, &shaderReadBarrier);
             }
 
         void Texture::destroy(){

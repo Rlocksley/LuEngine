@@ -28,7 +28,7 @@ namespace Lu {
             DescriptorSet& addTexture(uint32_t bindingNumber, const Texture& texture, VkShaderStageFlags stageFlags);
 
             template<size_t Size>
-            DescriptorSet& addTextureArray(uint32_t bindingNumber, const std::array<std::unique_ptr<Texture>, Size>& textures, VkShaderStageFlags stageFlags);
+            DescriptorSet& addTextureArray(uint32_t bindingNumber, const std::array<std::shared_ptr<Texture>, Size>& textures, VkShaderStageFlags stageFlags);
 
             DescriptorSet& addPushConstantRange(VkShaderStageFlags stageFlags, uint32_t offset, uint32_t size);
 
@@ -76,10 +76,10 @@ namespace Lu {
             template<size_t Size>
             struct TextureDescriptorResource final : DescriptorResource {
                 const Texture* texture{nullptr};
-                const std::array<std::unique_ptr<Texture>, Size>* textures{nullptr};
+                const std::array<std::shared_ptr<Texture>, Size>* textures{nullptr};
 
                 explicit TextureDescriptorResource(const Texture& value) : texture(&value) {}
-                explicit TextureDescriptorResource(const std::array<std::unique_ptr<Texture>, Size>& values) : textures(&values) {}
+                explicit TextureDescriptorResource(const std::array<std::shared_ptr<Texture>, Size>& values) : textures(&values) {}
                 
 
                 VkBuffer getVkBuffer(uint32_t, uint32_t) const override { 
@@ -88,13 +88,14 @@ namespace Lu {
                 }
 
                 VkDescriptorImageInfo getVkDescriptorImageInfo(uint32_t arrayIndex) const override {
-                    const Texture* selectedTexture;
-                    if(arrayIndex == 0){
-                        selectedTexture = texture;
-                    }
-                    if (selectedTexture == nullptr) {
+                    const Texture* selectedTexture = nullptr;
+                    if (textures != nullptr) {
+                        LU_ASSERT(arrayIndex < Size, "DescriptorSetBase", "getVkDescriptorImageInfo", "Texture array index is out of range.")
                         LU_ASSERT((*textures)[arrayIndex] != nullptr, "DescriptorSetBase", "getVkDescriptorImageInfo", "Texture array entry is null.")
                         selectedTexture = (*textures)[arrayIndex].get();
+                    } else {
+                        LU_ASSERT(arrayIndex == 0, "DescriptorSetBase", "getVkDescriptorImageInfo", "Single texture resource indexed as an array.")
+                        selectedTexture = texture;
                     }
                     LU_ASSERT(selectedTexture != nullptr, "DescriptorSetBase", "getVkDescriptorImageInfo", "Texture resource is null.")
                     return {selectedTexture->vkSampler, selectedTexture->vkImageView, selectedTexture->parameters.sampledLayout};
@@ -151,7 +152,7 @@ namespace Lu {
         }
 
         template<size_t Size>
-        DescriptorSet& DescriptorSet::addTextureArray(uint32_t bindingNumber, const std::array<std::unique_ptr<Texture>, Size>& textures, VkShaderStageFlags stageFlags) {
+        DescriptorSet& DescriptorSet::addTextureArray(uint32_t bindingNumber, const std::array<std::shared_ptr<Texture>, Size>& textures, VkShaderStageFlags stageFlags) {
             static_assert(Size > 0, "A descriptor texture array cannot be empty.");
             for (const auto& texture : textures) {
                 LU_ASSERT(texture != nullptr, "DescriptorSetBase", "addTextureArray", "Texture array entry must not be null.")

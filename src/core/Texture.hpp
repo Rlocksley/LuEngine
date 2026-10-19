@@ -13,9 +13,43 @@ namespace Lu{
             std::shared_ptr<uint8_t[]> pixels{ nullptr };
             VkFormat vkFormat{};
 
+            TextureCpu() = default;
+
             TextureCpu(uint32_t height, uint32_t width, std::shared_ptr<uint8_t[]> pixels);
 
             TextureCpu(const std::string& filePath);
+
+            TextureCpu(const TextureCpu&) = delete;
+            TextureCpu& operator=(const TextureCpu&) = delete;
+            
+            TextureCpu(TextureCpu&& other) noexcept
+                : width(other.width)
+                , height(other.height)
+                , pixels(other.pixels)
+                , vkFormat(other.vkFormat)
+            {
+                other.width = 0;
+                other.height = 0;
+                other.pixels = {};
+                other.vkFormat = {};
+            }
+
+            TextureCpu& operator=(TextureCpu&& other) noexcept
+            {
+                if (this != &other)
+                {
+                    width = other.width;
+                    height = other.height;
+                    pixels = other.pixels;
+                    vkFormat = other.vkFormat;
+
+                    other.width = 0;
+                    other.height = 0;
+                    other.pixels = {};
+                    other.vkFormat = {};
+                }
+                return *this;
+            }
         };
 
         struct TextureParameters {
@@ -63,18 +97,6 @@ namespace Lu{
                     parameters(parameters) {
                 
                 create();
-            }
-
-            Texture(const uint32_t width, const uint32_t height, 
-                    const VkFormat format, const VkImageUsageFlags usage, 
-                    const VkImageAspectFlags aspect, 
-                    const std::shared_ptr<uint8_t[]> pixels,
-                    const TextureParameters& parameters = {}) : 
-                    width(width), height(height), 
-                    format(format), usage(usage), aspect(aspect),
-                    parameters(parameters) {
-                
-                create(pixels);
             }
 
             ~Texture(){
@@ -143,8 +165,9 @@ namespace Lu{
                 return *this;
             }
 
-            void create(const std::shared_ptr<uint8_t[]> pixels);
             void create();
+            void recordCopy(VkCommandBuffer commandBuffer, VkBuffer sourceBuffer,
+                VkDeviceSize sourceOffset = 0) const;
             void destroy();
         };
 

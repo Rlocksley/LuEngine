@@ -25,12 +25,35 @@ namespace Lu{
             flecs::entity_t entity;            
         };
 
+        struct Material{
+            uint32_t numberTextures{0};
+            flecs::entity_t textures[4]{};
+            glm::vec4 albedo{1.f, 1.f, 1.f, 1.f};
+            glm::vec4 ambient{0.f, 0.f, 0.f, 0.f};
+            glm::vec4 emission{0.f,0.f,0.f,0.f};
+            float roughness{0.f};
+            float metallic{0.f};
+
+            Material(const Component::Material& material):
+            numberTextures(material.numberTextures),
+            albedo(material.albedo),
+            ambient(material.ambient),
+            emission(material.emission),
+            roughness(material.roughness),
+            metallic(material.metallic)
+            {
+                for(uint32_t i = 0; i < numberTextures; i++){
+                    textures[i] = material.textures[i].id();
+                }
+            }
+        };
+
         struct CreateMesh{
             flecs::entity_t parent;
             flecs::entity_t entity;            
             flecs::entity_t mesh;            
             flecs::entity_t pipe;
-            Component::Material material;
+            Material material;
         };
 
 

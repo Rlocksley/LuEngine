@@ -2,8 +2,8 @@
 #include "Global.hpp"
 namespace Lu{
     namespace Core{
-        const uint32_t MAX_FRAMES_PER_SECOND_RENDERER = 120;
-        const uint32_t MAX_FRAMES_PER_SECOND_ECS = 120; 
+        const uint32_t MAX_FRAMES_PER_SECOND_RENDERER = 240;
+        const uint32_t MAX_FRAMES_PER_SECOND_ECS = 240; 
         const uint32_t MAX_FRAMES_IN_FLIGHT = 2;
         const uint32_t MAX_MESH_INFOS = 1024;
         const uint32_t MAX_MESH_VERTEX_BUFFER_SIZE = 1024 * 1024;
@@ -23,6 +23,7 @@ namespace Lu{
                         MAX_MULTI_MESH_INSTANCES * 
                         MAX_ECS_REQUEST_CREATE_MULTI_MESH_PER_FRAME * //check if this is correct 
                         MAX_FRAMES_IN_FLIGHT;
+        const uint32_t MAX_TEXTURES = 256;
         const uint32_t MAX_LIGHTS = 1024;
 
 

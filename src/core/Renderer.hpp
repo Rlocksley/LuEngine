@@ -9,6 +9,7 @@
 #include "LightPackage.hpp"
 #include "MeshPackage.hpp"
 #include "MultiMeshPackage.hpp"
+#include "TexturePackage.hpp"
 #include "Channel.hpp"
 #include "FramerateMonitor.hpp"
 
@@ -29,8 +30,12 @@ namespace Lu{
 
             using MultiMeshPipeEntity = flecs::entity_t;
             void createMultiMeshPipe(const MultiMeshPipeEntity entity, const GraphicsPipelineConfig& config);
-            void createMultiMeshComputePipe(const MultiMeshPipeEntity entity, const ComputePipelineConfig& config);
+            
+            using MultiMeshComputePipeEntity = flecs::entity_t;
+            void createMultiMeshComputePipe(const MultiMeshComputePipeEntity entity, const ComputePipelineConfig& config);
 
+            using TextureEntity = flecs::entity_t;
+            void createTexture(const TextureEntity entity, const std::string& filePath);
         private:
 
             void processEcsRequests();
@@ -48,10 +53,11 @@ namespace Lu{
             TransformPackage transform;            
             LightPackage lights;
             GeometryPackage<Vertex::Mesh> meshGeometry;
+            TexturePackage texture;
             MeshPackage mesh;
             MultiMeshPackage multiMesh;
             std::deque<EcsRequest::CreateMultiMesh> pendingMultiMeshCreates;
-
+            
             static void beginRendering(const Command& cmd);
             static void endRendering(const Command& cmd);
             void beginDepthRendering(const Command& cmd);

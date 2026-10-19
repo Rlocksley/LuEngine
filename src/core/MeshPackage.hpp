@@ -8,11 +8,13 @@
 #include "GraphicsPipeline.hpp"
 #include "flecs.h"
 #include "Vertex.hpp"
+#include "instance/MaterialInstance.hpp"
 #include "instance/MeshInstance.hpp"
 #include "CameraPackage.hpp"
 #include "TransformPackage.hpp"
 #include "GeometryPackage.hpp"
 #include "LightPackage.hpp"
+#include "TexturePackage.hpp"
 #include "PipelineConfig.hpp"
 #include <cstddef>
 
@@ -59,8 +61,9 @@ namespace Lu{
             uint32_t instanceBufferSize{0};
 
         public:
-        MeshPackage(const CameraPackage& camera, const TransformPackage& transforms,
-            const LightPackage& lights, const GeometryPackage<Vertex::Mesh>& geometry)
+        MeshPackage(const CameraPackage& camera, const LightPackage& lights,
+            const TransformPackage& transforms, const TexturePackage& textures,
+            const GeometryPackage<Vertex::Mesh>& geometry)
             : instanceBuffer(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME*MAX_FRAMES_IN_FLIGHT, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
             meshBuffer(MAX_MESHES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
             indirectBufferDepth(MAX_MESHES, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
@@ -95,7 +98,7 @@ namespace Lu{
             createTransferPipe();
             createCullPipe(camera, transforms, geometry);
             createDepthPipe(camera, transforms);
-            createMeshDescriptorSet(camera, transforms, lights);
+            createMeshDescriptorSet(camera, lights, transforms, textures);
         }
 
         ~MeshPackage(){}
@@ -174,8 +177,8 @@ namespace Lu{
             );
         }
 
-        void createMeshDescriptorSet(const CameraPackage& camera,
-            const TransformPackage& transforms, const LightPackage& lights){
+        void createMeshDescriptorSet(const CameraPackage& camera, const LightPackage& lights,
+                                    const TransformPackage& transforms, const TexturePackage& textures){
             meshDescrSet
             .addUniformBuffer(0, camera.getCameraBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .addUniformBuffer(1, lights.getLightCountBuffer(), VK_SHADER_STAGE_FRAGMENT_BIT)
@@ -183,6 +186,7 @@ namespace Lu{
             .addStorageBuffer(3, lights.getLightIndicesBuffer(), VK_SHADER_STAGE_FRAGMENT_BIT)
             .addStorageBuffer(4, transforms.getTransformBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .addStorageBuffer(5, meshBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addTextureArray(6, textures.getTextureArray(), VK_SHADER_STAGE_FRAGMENT_BIT)
             .build();
         }
 
@@ -222,7 +226,7 @@ namespace Lu{
     
         void createMesh(const MeshEntity meshEntity, const MeshPipeEntity meshPipeEntity, 
                         const TransformId transformId, const GeometryInfoId meshInfoId,
-                        const Component::Material& material) {
+                        const Material& material) {
             
             auto pipeIt = entityToPipeId.find(meshPipeEntity);
             LU_ASSERT(pipeIt != entityToPipeId.end(), "MeshPackage", "createMesh", "No PipelineId for given MeshPipeline-Entity");
@@ -433,6 +437,10 @@ namespace Lu{
             }
         }
 
+
+        void updateDescriptorSetWrites(){
+            meshDescrSet.updateDescriptorSetWrites();
+        }
 
         private:
         static std::shared_ptr<IBufferResource> initDummyIndirectBuffer() {

@@ -9,6 +9,7 @@
 #include "modul/TransformGpuModule.hpp"
 #include "modul/MultiMeshGpuModule.hpp"
 #include "modul/LightModule.hpp"
+#include "component/Mesh.hpp"
 #include "component/InputState.hpp"
 #include "PipelineConfig.hpp"
 #include "Exit.hpp"
@@ -62,14 +63,18 @@ namespace Lu{
         App& registerMultiMeshPipe(const GraphicsPipelineConfig& config){
             LU_ASSERT(config.name.size() > 0, "App", "registerMultiMeshPipe", "GraphicsPipelineConfig.name must be size bigger 0");
             LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerMultiMeshPipe", "Entity with name: " + config.name + " already exists");
+        
             renderer->createMultiMeshPipe(world->entity(config.name.c_str()).id(), config);
+        
             return *this;
         }
 
         App& registerMultiMeshComputePipe(const ComputePipelineConfig& config){
             LU_ASSERT(config.name.size() > 0, "App", "registerMultiMeshComputePipe", "ComputePipelineConfig.name must be size bigger 0");
             LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerMultiMeshComputePipe", "Entity with name: " + config.name + " already exists");
+        
             renderer->createMultiMeshComputePipe(world->entity(config.name.c_str()).id(), config);
+        
             return *this;
         }
 
@@ -87,6 +92,15 @@ namespace Lu{
         App& registerShape(const std::string& name, Args&&... args){
             Shape shape(std::forward<Args>(args)...);
             return registerMesh(name, shape.getVertices(), shape.getIndices());
+        }
+
+        App& registerTexture(const std::string& name, const std::string& filePath){
+            LU_ASSERT(name.size() > 0, "App", "registerTexture", "name must be size bigger zer");
+            LU_ASSERT(!world->lookup(name.c_str()), "App", "registerTexture", "Entity with name: " + name + " already exists");
+            
+            renderer->createTexture(world->entity(name.c_str()).id(), filePath);
+
+            return *this;
         }
 
         template<typename Module>

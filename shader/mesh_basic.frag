@@ -1,4 +1,5 @@
 #version 460
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(location = 0) in vec3 inWorldNormal;
 layout(location = 1) in vec4 inColor;
@@ -9,7 +10,7 @@ layout(location = 4) in vec3 inWorldPos;
 layout(location = 0) out vec4 outColor;
 
 struct Material {
-    ivec4 textureIds;
+    uvec4 textureIds;
     vec4 albedo;
     vec4 ambient;
     vec4 emission;
@@ -77,6 +78,8 @@ layout(set = 0, binding = 4) readonly buffer TransformBuffer {
 layout(set = 0, binding = 5) readonly buffer MeshBuffer {
     Mesh meshes[];
 } meshes;
+
+layout(set = 0, binding = 6) uniform sampler2D textureArray[];
 
 #define TILE_WIDTH 16u
 #define TILE_HEIGHT 16u
@@ -147,7 +150,13 @@ void main() {
             lightBuffer.lights[lightIndex], normal, viewDirection, material.roughness);
     }
 
-    vec3 albedo = inColor.rgb * material.albedo.rgb;
+    vec4 surfaceColor = vec4(inColor.rgb, inColor.a) * material.albedo;
+    if (material.textureIds.x != 0xffffffffu) {
+        surfaceColor *= texture(
+            textureArray[nonuniformEXT(material.textureIds.x)],
+            inTexCoord);
+    }
+    vec3 albedo = surfaceColor.rgb;
     vec3 color = albedo * lighting + material.emission.rgb;
-    outColor = vec4(color, inColor.a * material.albedo.a);
+    outColor = vec4(color, surfaceColor.a);
 }

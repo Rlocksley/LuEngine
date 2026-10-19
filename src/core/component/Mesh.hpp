@@ -56,7 +56,8 @@ namespace Lu{
                         
                         for (int i = 0; i < it.count(); ++i) {
                             auto entity = it.entity(i);
-                            meshBuffer.push_back(EcsRequest::CreateMesh{entity.parent(), entity , meshes[i].mesh, meshes[i].pipeline, materials[i]});
+                            
+                            meshBuffer.push_back(EcsRequest::CreateMesh{entity.parent(), entity , meshes[i].mesh, meshes[i].pipeline, EcsRequest::Material{materials[i]}});
                             entity.remove<Component::MeshGpuDirty>();
                         }
                     }
