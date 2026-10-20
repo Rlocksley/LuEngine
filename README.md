@@ -10,6 +10,31 @@ LuEngine is a C++ game engine built around two user-facing APIs:
 
 The renderer is Vulkan-based.
 
+## Loading a Model Prefab
+
+`App::loadModel` imports a model with Assimp and registers each mesh
+geometry and diffuse texture with the renderer. It creates a Flecs prefab with
+`TransformGpu` but no `Transform`; each child contains its mesh and material.
+The default mesh pipeline is `MeshPipe::Simple` (register it before loading),
+or pass a different registered pipeline name as the fourth argument.
+
+```cpp
+Lu::App("Robot scene")
+    .registerMeshPipe(/* ... */)
+    .loadModel("Robot", "asset/models/robot.gltf")
+    .importModule<RobotScene>()
+    .run();
+
+auto robotPrefab = world.lookup("Mesh::Robot");
+world.entity("RobotInstance")
+    .is_a(robotPrefab)
+    .set<Lu::Component::Transform>({
+        glm::vec3(0.0f), 0.0f,
+        glm::vec3(0.0f, 1.0f, 0.0f),
+        glm::vec3(1.0f)
+    });
+```
+
 ## To a working Development-Environment in 10 Minutes (Window, Linux)
 1.] clone the repo with `git clone https://github.com/Rlocksley/LuEngine` \
 2.] install CMake and the Vulkan SDK (Vulkan 1.4)\

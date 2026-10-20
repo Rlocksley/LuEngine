@@ -69,6 +69,7 @@ target_link_libraries(lu_core PUBLIC
     # External dependencies
     Vulkan::Vulkan  # The imported target for Vulkan
     glm::glm        # The imported target for GLM
-    glfw            # The imported target for GLFW (note: glfw, not glfw3)
+    glfw            # The imported target for GLFW3
     flecs::flecs
+    assimp::assimp  # The imported target for Assimp
 )

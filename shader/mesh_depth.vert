@@ -11,14 +11,14 @@ struct Transform {
 };
 
 struct Material {
-    ivec4 textureIds;
+    uvec4 texturesIds; // x = albedo, y = normal, z = roughness, w = metallic
     vec4 albedo;
     vec4 ambient;
     vec4 emission;
     float roughness;
     float metallic;
+    uint emissionTextureId;
     uint pad0;
-    uint pad1;
 };
 
 struct Mesh {

@@ -1,4 +1,5 @@
 #version 460
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(location = 0) in vec3 inWorldNormal;
 layout(location = 1) in vec4 inColor;
@@ -11,13 +12,14 @@ layout(location = 0) out vec4 outColor;
 const float PI = 3.14159265359;
 
 struct Material {
-    ivec4 textureIds;
+    uvec4 textureIds;
     vec4 albedo;
     vec4 ambient;
     vec4 emission;
     float roughness;
     float metallic;
-    vec2 _pad;
+    uint emissionTextureId;
+    uint _pad;
 };
 
 struct Mesh {
@@ -79,6 +81,8 @@ layout(set = 0, binding = 4) readonly buffer TransformBuffer {
 layout(set = 0, binding = 5) readonly buffer MeshBuffer {
     Mesh meshes[];
 } meshes;
+
+layout(set = 0, binding = 6) uniform sampler2D textureArray[];
 
 #define TILE_WIDTH 16u
 #define TILE_HEIGHT 16u
@@ -161,15 +165,67 @@ vec3 evaluateLight(
     return (diffuse + specular) * radiance * nDotL;
 }
 
+vec3 applyNormalMap(vec3 surfaceNormal, vec2 texCoord, uint normalTextureId) {
+    vec3 normal = normalize(surfaceNormal);
+    vec3 positionDx = dFdx(inWorldPos);
+    vec3 positionDy = dFdy(inWorldPos);
+    vec2 texCoordDx = dFdx(texCoord);
+    vec2 texCoordDy = dFdy(texCoord);
+    float uvDeterminant = texCoordDx.x * texCoordDy.y -
+        texCoordDx.y * texCoordDy.x;
+    if (abs(uvDeterminant) <= 1e-8) {
+        return normal;
+    }
+
+    vec3 tangent = (positionDx * texCoordDy.y - positionDy * texCoordDx.y) /
+        uvDeterminant;
+    tangent -= normal * dot(normal, tangent);
+    float tangentLengthSquared = dot(tangent, tangent);
+    if (tangentLengthSquared <= 1e-12) {
+        return normal;
+    }
+    tangent *= inversesqrt(tangentLengthSquared);
+    vec3 bitangent = normalize(cross(normal, tangent)) * sign(uvDeterminant);
+    vec3 tangentNormal = texture(
+        textureArray[nonuniformEXT(normalTextureId)], texCoord).xyz * 2.0 - 1.0;
+    return normalize(mat3(tangent, bitangent, normal) * tangentNormal);
+}
+
 void main() {
     Material material = meshes.meshes[inInstanceId].material;
     vec3 normal = normalize(inWorldNormal);
+    if (material.textureIds.y != 0xffffffffu) {
+        normal = applyNormalMap(normal, inTexCoord, material.textureIds.y);
+    }
     vec3 viewDirection = normalize(camera.camPos.xyz - inWorldPos);
-    vec3 albedo = inColor.rgb * material.albedo.rgb;
+    vec4 surfaceColor = vec4(inColor.rgb, inColor.a) * material.albedo;
+    if (material.textureIds.x != 0xffffffffu) {
+        surfaceColor *= texture(
+            textureArray[nonuniformEXT(material.textureIds.x)],
+            inTexCoord);
+    }
+    vec3 albedo = surfaceColor.rgb;
     float metallic = clamp(material.metallic, 0.0, 1.0);
     float roughness = clamp(material.roughness, 0.045, 1.0);
+    if (material.textureIds.z != 0xffffffffu) {
+        roughness = clamp(
+            texture(textureArray[nonuniformEXT(material.textureIds.z)], inTexCoord).r,
+            0.045,
+            1.0);
+    }
+    if (material.textureIds.w != 0xffffffffu) {
+        metallic = clamp(
+            texture(textureArray[nonuniformEXT(material.textureIds.w)], inTexCoord).r,
+            0.0,
+            1.0);
+    }
 
-    vec3 color = albedo * material.ambient.rgb + material.emission.rgb;
+    vec3 emission = material.emission.rgb;
+    if (material.emissionTextureId != 0xffffffffu) {
+        emission *= texture(
+            textureArray[nonuniformEXT(material.emissionTextureId)], inTexCoord).rgb;
+    }
+    vec3 color = albedo * material.ambient.rgb + emission;
     uint px = uint(gl_FragCoord.x);
     uint py = uint(gl_FragCoord.y);
     uint tilesX = (uint(camera.screenSize.x) + TILE_WIDTH - 1u) / TILE_WIDTH;
@@ -196,5 +252,5 @@ void main() {
         );
     }
 
-    outColor = vec4(color, inColor.a * material.albedo.a);
+    outColor = vec4(color, surfaceColor.a);
 }

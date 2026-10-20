@@ -169,13 +169,13 @@ namespace Lu{
         float h = halfSize;
         vertices = {
             // bottom-left
-            {{-h + offset.x, -h + offset.y, offset.z}, {0.0f, 0.0f, 1.0f}, color, {0.0f, 0.0f}},
+            {{-h + offset.x, -h + offset.y, offset.z}, {0.0f, 0.0f, 1.0f}, color, {0.0f, 1.0f}},
             // bottom-right
-            {{ h + offset.x, -h + offset.y, offset.z}, {0.0f, 0.0f, 1.0f}, color, {1.0f, 0.0f}},
+            {{ h + offset.x, -h + offset.y, offset.z}, {0.0f, 0.0f, 1.0f}, color, {1.0f, 1.0f}},
             // top-right
-            {{ h + offset.x,  h + offset.y, offset.z}, {0.0f, 0.0f, 1.0f}, color, {1.0f, 1.0f}},
+            {{ h + offset.x,  h + offset.y, offset.z}, {0.0f, 0.0f, 1.0f}, color, {1.0f, 0.0f}},
             // top-left
-            {{-h + offset.x,  h + offset.y, offset.z}, {0.0f, 0.0f, 1.0f}, color, {0.0f, 1.0f}},
+            {{-h + offset.x,  h + offset.y, offset.z}, {0.0f, 0.0f, 1.0f}, color, {0.0f, 0.0f}},
         };
     }
 

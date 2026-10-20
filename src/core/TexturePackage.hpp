@@ -41,12 +41,16 @@ namespace Lu{
             }
 
             void createTexture(TextureEntity entity, const std::string& filePath) {
+                TextureCpu cpuTexture(filePath);
+                createTexture(entity, std::move(cpuTexture));
+            }
+
+            void createTexture(TextureEntity entity, TextureCpu&& cpuTexture) {
                 LU_ASSERT(entityToTextureId.find(entity) == entityToTextureId.end(),
                     "TexturePackage", "createTexture", "Entity already has a texture.")
                 LU_ASSERT(textureCount < MAX_TEXTURES,
                     "TexturePackage", "createTexture", "Texture capacity exceeded.")
 
-                TextureCpu cpuTexture(filePath);
                 const TextureId id = textureCount;
                 auto texture = std::make_shared<Texture>(
                     cpuTexture.width,

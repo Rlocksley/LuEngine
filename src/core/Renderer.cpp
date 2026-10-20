@@ -32,11 +32,7 @@ namespace Lu{
         }
 
         void Renderer::run(FramerateMonitor& framerateMonitor) {
-            std::chrono::duration<double> targetFrameTime(1.0 / MAX_FRAMES_PER_SECOND_RENDERER);
-
             while (Core::isRunning.load(std::memory_order_relaxed) && Core::updateCore()) {
-                auto frameStart = std::chrono::high_resolution_clock::now();
-
                 // Reuse the command buffer and frame-indexed resources only
                 // after this frame slot's previous submission has completed.
                 command[frameIndex].waitForFence();
@@ -56,13 +52,6 @@ namespace Lu{
                     presentResult == VK_ERROR_OUT_OF_DATE_KHR)
                 {
                     Core::recreateSwapchain();
-                }
-
-                // Sleep for the remaining frame budget to cap at MAX_FRAMES_PER_SECOND_RENDERER.
-                auto frameEnd = std::chrono::high_resolution_clock::now();
-                auto elapsed  = frameEnd - frameStart;
-                if (elapsed < targetFrameTime) {
-                    std::this_thread::sleep_for(targetFrameTime - elapsed);
                 }
             }
 
@@ -91,6 +80,11 @@ namespace Lu{
             texture.createTexture(entity, filePath);
             mesh.updateDescriptorSetWrites();
         }
+
+        void Renderer::createTexture(const TextureEntity entity, TextureCpu&& textureCpu){
+            texture.createTexture(entity, std::move(textureCpu));
+            mesh.updateDescriptorSetWrites();
+        }
         
         void Renderer::processEcsRequests(){
             auto vecEcsRequests = GetChannel().drain(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME);
@@ -106,10 +100,12 @@ namespace Lu{
                         },
                         
                         [&](const EcsRequest::CreateMesh& req){
-                            uint32_t textureIds[4]{UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};
+                            uint32_t textureIds[5]{UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};
 
-                            for(uint32_t i = 0; i < req.material.numberTextures; i++){
-                                textureIds[i] = texture.getTextureId(req.material.textures[i]);    
+                            for(uint32_t i = 0; i < 5; i++){
+                                if(req.material.textures[i] != 0){
+                                    textureIds[i] = texture.getTextureId(req.material.textures[i]);
+                                }
                             }
 
                             Material material(

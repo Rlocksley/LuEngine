@@ -6,6 +6,7 @@
 #include "flecs.h"
 #include "Vertex.hpp"
 #include "Renderer.hpp"
+#include "AssetManager.hpp"
 #include "modul/TransformGpuModule.hpp"
 #include "modul/MultiMeshGpuModule.hpp"
 #include "modul/LightModule.hpp"
@@ -42,9 +43,11 @@ namespace Lu{
 
             renderer = new Core::Renderer();
             world = new flecs::world();
+            Core::GetAssetManager().set(renderer, world);
         }
 
         ~App(){
+            Core::GetAssetManager().set(nullptr, nullptr);
             delete world;
             delete renderer;
             Core::destroyCore();
@@ -103,6 +106,13 @@ namespace Lu{
             return *this;
         }
 
+        App& loadModel(const std::string& name, const std::string& filePath,
+            const std::string& prefix = "Mesh::",
+            const std::string& pipelineName = "MeshPipe::Simple") {
+            Core::GetAssetManager().loadModel(name, filePath, prefix, pipelineName);
+            return *this;
+        }
+
         template<typename Module>
         App& importModule(const ModulImportType importType = ModulImportType::enabled){
             moduleFuncs.push_back(
@@ -154,7 +164,7 @@ namespace Lu{
                     }
                     framerateMonitor.recordEcsFrame();
 
-                    // Sleep for the remaining frame budget to cap at MAX_FRAMES_PER_SECOND_RENDERER.
+                    // Sleep for the remaining ECS frame budget.
                     auto frameEnd = std::chrono::high_resolution_clock::now();
                     auto elapsed  = frameEnd - frameStart;
                     if (elapsed < targetFrameTime) {

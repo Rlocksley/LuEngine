@@ -36,6 +36,7 @@ namespace Lu{
 
             using TextureEntity = flecs::entity_t;
             void createTexture(const TextureEntity entity, const std::string& filePath);
+            void createTexture(const TextureEntity entity, TextureCpu&& texture);
         private:
 
             void processEcsRequests();

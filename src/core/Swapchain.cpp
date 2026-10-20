@@ -11,10 +11,11 @@ namespace Lu
     {
         void createSwapchain()
         {
-            const uint32_t minImageCount = 
-            vkSurfaceCapabilitiesKHR.maxImageCount > 0 ?
-            vkSurfaceCapabilitiesKHR.maxImageCount : 
-            vkSurfaceCapabilitiesKHR.minImageCount + 1;
+            uint32_t minImageCount = vkSurfaceCapabilitiesKHR.minImageCount + 1;
+            if (vkSurfaceCapabilitiesKHR.maxImageCount > 0 &&
+                minImageCount > vkSurfaceCapabilitiesKHR.maxImageCount) {
+                minImageCount = vkSurfaceCapabilitiesKHR.maxImageCount;
+            }
 
             VkSwapchainCreateInfoKHR createInfo{};
             createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;

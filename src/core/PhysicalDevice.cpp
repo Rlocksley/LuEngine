@@ -276,15 +276,7 @@ namespace Lu
             vkGetPhysicalDeviceSurfacePresentModesKHR
             (vkPhysicalDevice, vkSurfaceKHR, &numberPresentModes, modes.data());
 
-            for(size_t i = 0; i < numberPresentModes; i++)
-            {
-                if(modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
-                {
-                    vkPresentModeKHR =  modes[i];
-                    return;
-                }
-            }
-            vkPresentModeKHR = modes[0];
+            vkPresentModeKHR = VK_PRESENT_MODE_FIFO_KHR;
         }
 
         void getVkPhysicalDeviceProperties()

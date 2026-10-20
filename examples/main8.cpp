@@ -7,15 +7,34 @@
 #include "component/Transform.hpp"
 #include "component/TransformGpu.hpp"
 
+#include <algorithm>
 #include <array>
 #include <string>
 
 namespace {
 
+struct TiledBrickCube {
+    std::vector<Lu::Vertex::Mesh> vertices;
+    std::vector<uint32_t> indices;
+
+    TiledBrickCube(const glm::vec3& halfSize, const glm::vec3& offset,
+        const glm::vec4& color) {
+        Lu::Shape::Cube cube(halfSize, offset, color);
+        vertices = cube.getVertices();
+        indices = cube.getIndices();
+        for (auto& vertex : vertices) {
+            vertex.texCoord *= glm::vec2(4.0f, 6.0f);
+        }
+    }
+
+    const std::vector<Lu::Vertex::Mesh>& getVertices() { return vertices; }
+    const std::vector<uint32_t>& getIndices() { return indices; }
+};
+
 void addBox(flecs::world& world, const std::string& name,
-    const flecs::entity& cubeMesh, const flecs::entity& meshPipeline,
-    const flecs::entity& brickTexture, const glm::vec3& center,
-    const glm::vec3& halfExtents, const glm::vec4& color, bool useBricks = false) {
+    const flecs::entity& boxMesh, const flecs::entity& meshPipeline,
+    const flecs::entity& texture, const glm::vec3& center,
+    const glm::vec3& halfExtents, const glm::vec4& color, bool useTexture = false) {
     Lu::Component::Transform transform{};
     transform.position = center;
     transform.scale = halfExtents * 2.0f;
@@ -28,44 +47,77 @@ void addBox(flecs::world& world, const std::string& name,
     material.albedo = color;
     material.ambient = glm::vec4(0.20f, 0.18f, 0.16f, 1.0f);
     material.roughness = 0.85f;
-    if (useBricks) {
-        material.numberTextures = 1;
-        material.textures[0] = brickTexture;
+    if (useTexture) {
+        material.textures[0] = texture;
     }
 
     world.entity((name + "_Mesh").c_str())
         .set(flecs::Parent{boxTransform})
         .set(Lu::Component::Mesh{
-            .mesh = cubeMesh,
+            .mesh = boxMesh,
+            .pipeline = meshPipeline
+        })
+        .set(material);
+}
+
+void addWindow(flecs::world& world, const std::string& name,
+    const flecs::entity& windowMesh, const flecs::entity& meshPipeline,
+    const flecs::entity& windowTexture, const glm::vec3& center,
+    float width, float height, float rotationY) {
+    Lu::Component::Transform transform{};
+    transform.position = center;
+    transform.scale = glm::vec3(width, height, 1.0f);
+    transform.rotation = glm::angleAxis(
+        rotationY + glm::pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    const flecs::entity windowTransform = world.entity((name + "_Transform").c_str())
+        .set<Lu::Component::Transform>(transform)
+        .add<Lu::Component::TransformGpu>();
+
+    Lu::Component::Material material{};
+    material.textures[0] = windowTexture;
+    material.albedo = glm::vec4(1.0f);
+    material.ambient = glm::vec4(0.35f, 0.35f, 0.35f, 1.0f);
+    material.roughness = 0.75f;
+
+    world.entity((name + "_Mesh").c_str())
+        .set(flecs::Parent{windowTransform})
+        .set<Lu::Component::Mesh>({
+            .mesh = windowMesh,
             .pipeline = meshPipeline
         })
         .set(material);
 }
 
 void addBuilding(flecs::world& world, const std::string& name,
-    const flecs::entity& cubeMesh, const flecs::entity& meshPipeline,
-    const flecs::entity& brickTexture, float x, float z,
+    const flecs::entity& cubeMesh, const flecs::entity& tiledBrickMesh,
+    const flecs::entity& windowMesh,
+    const flecs::entity& meshPipeline, const flecs::entity& brickTexture,
+    const flecs::entity& streetTexture, const flecs::entity& windowTexture,
+    float x, float z,
     float halfWidth, float halfDepth, float height,
     const glm::vec4& brickTint, bool hasRooftopRoom) {
     const glm::vec4 limestone(0.72f, 0.62f, 0.48f, 1.0f);
     const float baseY = 0.3f;
     const float frontZ = z + (z > 0.0f ? -halfDepth : halfDepth);
 
-    addBox(world, name + "_Walls", cubeMesh, meshPipeline, brickTexture,
+    addBox(world, name + "_Walls", tiledBrickMesh, meshPipeline, brickTexture,
         glm::vec3(x, baseY + height * 0.5f, z),
         glm::vec3(halfWidth, height * 0.5f, halfDepth), brickTint, true);
 
-    addBox(world, name + "_Foundation", cubeMesh, meshPipeline, brickTexture,
+    addBox(world, name + "_Foundation", tiledBrickMesh, meshPipeline, streetTexture,
         glm::vec3(x, 0.2f, z),
-        glm::vec3(halfWidth + 0.16f, 0.2f, halfDepth + 0.16f), limestone);
+        glm::vec3(halfWidth + 0.16f, 0.2f, halfDepth + 0.16f),
+        glm::vec4(1.0f), true);
 
-    addBox(world, name + "_BeltCourse", cubeMesh, meshPipeline, brickTexture,
+    addBox(world, name + "_BeltCourse", tiledBrickMesh, meshPipeline, streetTexture,
         glm::vec3(x, baseY + height * 0.68f, frontZ),
-        glm::vec3(halfWidth + 0.03f, 0.09f, 0.09f), limestone);
+        glm::vec3(halfWidth + 0.03f, 0.09f, 0.09f), glm::vec4(1.0f), true);
 
-    addBox(world, name + "_Cornice", cubeMesh, meshPipeline, brickTexture,
+    addBox(world, name + "_Cornice", tiledBrickMesh, meshPipeline, streetTexture,
         glm::vec3(x, baseY + height + 0.04f, z),
-        glm::vec3(halfWidth + 0.22f, 0.16f, halfDepth + 0.22f), limestone);
+        glm::vec3(halfWidth + 0.22f, 0.16f, halfDepth + 0.22f),
+        glm::vec4(1.0f), true);
 
     addBox(world, name + "_RoofCap", cubeMesh, meshPipeline, brickTexture,
         glm::vec3(x, baseY + height + 0.27f, z),
@@ -73,20 +125,53 @@ void addBuilding(flecs::world& world, const std::string& name,
 
     for (int side = -1; side <= 1; side += 2) {
         addBox(world, name + "_Pilaster_" + std::to_string(side),
-            cubeMesh, meshPipeline, brickTexture,
+            tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(x + side * halfWidth * 0.68f,
                 baseY + height * 0.5f, frontZ),
-            glm::vec3(0.12f, height * 0.43f, 0.10f), limestone);
+            glm::vec3(0.12f, height * 0.43f, 0.10f), glm::vec4(1.0f), true);
+    }
+
+    const uint32_t windowRows = std::max(2u, static_cast<uint32_t>(height / 2.8f));
+    const float windowHalfWidth = std::min(0.46f, halfWidth * 0.24f);
+    const float windowHalfHeight = std::min(0.72f, height / (windowRows + 1.0f) * 0.34f);
+    for (uint32_t row = 0; row < windowRows; ++row) {
+        const float windowY = baseY + height * (row + 1.0f) / (windowRows + 1.0f);
+        for (int side : {-1, 1}) {
+            const float horizontalOffset = side * 0.34f;
+            addWindow(world, name + "_Window_Z_" + std::to_string(row) + "_" +
+                    std::to_string(side),
+                windowMesh, meshPipeline, windowTexture,
+                glm::vec3(x + horizontalOffset * halfWidth, windowY, z + halfDepth + 0.16f),
+                windowHalfWidth * 2.0f, windowHalfHeight * 2.0f, 0.0f);
+            addWindow(world, name + "_Window_NearZ_" + std::to_string(row) + "_" +
+                    std::to_string(side),
+                windowMesh, meshPipeline, windowTexture,
+                glm::vec3(x + horizontalOffset * halfWidth, windowY, z - halfDepth - 0.16f),
+                windowHalfWidth * 2.0f, windowHalfHeight * 2.0f, glm::radians(180.0f));
+            addWindow(world, name + "_Window_X_" + std::to_string(row) + "_" +
+                    std::to_string(side),
+                windowMesh, meshPipeline, windowTexture,
+                glm::vec3(x + halfWidth + 0.16f, windowY,
+                    z + horizontalOffset * halfDepth),
+                windowHalfWidth * 2.0f, windowHalfHeight * 2.0f, glm::radians(90.0f));
+            addWindow(world, name + "_Window_NearX_" + std::to_string(row) + "_" +
+                    std::to_string(side),
+                windowMesh, meshPipeline, windowTexture,
+                glm::vec3(x - halfWidth - 0.16f, windowY,
+                    z + horizontalOffset * halfDepth),
+                windowHalfWidth * 2.0f, windowHalfHeight * 2.0f, glm::radians(-90.0f));
+        }
     }
 
     if (hasRooftopRoom) {
-        addBox(world, name + "_RooftopRoom", cubeMesh, meshPipeline, brickTexture,
+        addBox(world, name + "_RooftopRoom", tiledBrickMesh, meshPipeline, brickTexture,
             glm::vec3(x, baseY + height + 0.72f, z),
             glm::vec3(halfWidth * 0.52f, 0.30f, halfDepth * 0.52f),
             brickTint, true);
-        addBox(world, name + "_RooftopCoping", cubeMesh, meshPipeline, brickTexture,
+        addBox(world, name + "_RooftopCoping", tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(x, baseY + height + 1.05f, z),
-            glm::vec3(halfWidth * 0.58f, 0.06f, halfDepth * 0.58f), limestone);
+            glm::vec3(halfWidth * 0.58f, 0.06f, halfDepth * 0.58f),
+            glm::vec4(1.0f), true);
     }
 }
 
@@ -127,49 +212,51 @@ struct AntiqueBlockCity {
             .add<Lu::Component::Transform>();
 
         const flecs::entity brickTexture = world.lookup("Texture::Bricks");
+        const flecs::entity windowTexture = world.lookup("Texture::Windows");
+        const flecs::entity streetTexture = world.lookup("Texture::Street");
         const flecs::entity cubeMesh = world.lookup("Mesh::BrickCube");
+        const flecs::entity tiledBrickMesh = world.lookup("Mesh::TiledBrickCube");
+        const flecs::entity windowMesh = world.lookup("Mesh::WindowPanel");
         const flecs::entity meshPipeline = world.lookup("MeshPipe::Bricks");
 
-        addBox(world, "City_Ground", cubeMesh, meshPipeline, brickTexture,
+        addBox(world, "City_Ground", tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(0.0f, -0.25f, 0.0f),
             glm::vec3(14.2f, 0.25f, 14.2f),
-            glm::vec4(0.34f, 0.31f, 0.28f, 1.0f));
+            glm::vec4(1.0f), true);
 
-        addBox(world, "City_NorthSouth_Road", cubeMesh, meshPipeline, brickTexture,
+        addBox(world, "City_NorthSouth_Road", tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(0.0f, 0.015f, 0.0f),
             glm::vec3(1.65f, 0.025f, 14.0f),
-            glm::vec4(0.30f, 0.27f, 0.24f, 1.0f));
-        addBox(world, "City_EastWest_Road", cubeMesh, meshPipeline, brickTexture,
+            glm::vec4(1.0f), true);
+        addBox(world, "City_EastWest_Road", tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(0.0f, 0.016f, 0.0f),
             glm::vec3(14.0f, 0.026f, 1.65f),
-            glm::vec4(0.30f, 0.27f, 0.24f, 1.0f));
+            glm::vec4(1.0f), true);
 
-        const glm::vec4 sidewalk(0.58f, 0.51f, 0.42f, 1.0f);
         for (int side = -1; side <= 1; side += 2) {
             const float offset = side * 1.92f;
             addBox(world, "City_NS_Sidewalk_" + std::to_string(side),
-                cubeMesh, meshPipeline, brickTexture,
+                tiledBrickMesh, meshPipeline, streetTexture,
                 glm::vec3(offset, 0.13f, 0.0f),
-                glm::vec3(0.25f, 0.13f, 14.0f), sidewalk);
+                glm::vec3(0.25f, 0.13f, 14.0f), glm::vec4(1.0f), true);
             addBox(world, "City_EW_Sidewalk_" + std::to_string(side),
-                cubeMesh, meshPipeline, brickTexture,
+                tiledBrickMesh, meshPipeline, streetTexture,
                 glm::vec3(0.0f, 0.13f, offset),
-                glm::vec3(14.0f, 0.13f, 0.25f), sidewalk);
+                glm::vec3(14.0f, 0.13f, 0.25f), glm::vec4(1.0f), true);
         }
 
-        const glm::vec4 plazaStone(0.68f, 0.59f, 0.47f, 1.0f);
-        addBox(world, "City_Plaza", cubeMesh, meshPipeline, brickTexture,
+        addBox(world, "City_Plaza", tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(0.0f, 0.055f, 0.0f),
-            glm::vec3(1.55f, 0.04f, 1.55f), plazaStone);
-        addBox(world, "City_Fountain_Base", cubeMesh, meshPipeline, brickTexture,
+            glm::vec3(1.55f, 0.04f, 1.55f), glm::vec4(1.0f), true);
+        addBox(world, "City_Fountain_Base", tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(0.0f, 0.28f, 0.0f),
-            glm::vec3(0.48f, 0.20f, 0.48f), plazaStone);
-        addBox(world, "City_Fountain_Basin", cubeMesh, meshPipeline, brickTexture,
+            glm::vec3(0.48f, 0.20f, 0.48f), glm::vec4(1.0f), true);
+        addBox(world, "City_Fountain_Basin", tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(0.0f, 0.63f, 0.0f),
-            glm::vec3(0.70f, 0.13f, 0.70f), plazaStone);
-        addBox(world, "City_Fountain_Pillar", cubeMesh, meshPipeline, brickTexture,
+            glm::vec3(0.70f, 0.13f, 0.70f), glm::vec4(1.0f), true);
+        addBox(world, "City_Fountain_Pillar", tiledBrickMesh, meshPipeline, streetTexture,
             glm::vec3(0.0f, 0.98f, 0.0f),
-            glm::vec3(0.16f, 0.30f, 0.16f), plazaStone);
+            glm::vec3(0.16f, 0.30f, 0.16f), glm::vec4(1.0f), true);
 
         const std::array<float, 8> heights{
             5.8f, 7.4f, 8.8f, 6.4f, 9.6f, 6.9f, 7.9f, 5.5f
@@ -191,7 +278,8 @@ struct AntiqueBlockCity {
                         const float halfDepth = 1.82f + 0.10f * (buildingIndex % 3);
                         const std::string name = "City_Building_" +
                             std::to_string(buildingIndex);
-                        addBuilding(world, name, cubeMesh, meshPipeline, brickTexture,
+                        addBuilding(world, name, cubeMesh, tiledBrickMesh, windowMesh,
+                            meshPipeline, brickTexture, streetTexture, windowTexture,
                             x, z, halfWidth, halfDepth,
                             heights[buildingIndex % heights.size()],
                             brickTints[buildingIndex % brickTints.size()],
@@ -227,17 +315,31 @@ struct AntiqueBlockCity {
 }
 
 int main() {
-    Lu::App("LuEngine Antique Brick Block City", false, 1440, 900)
+    Lu::App("LuEngine Antique Brick Block City", true)
         .registerTexture("Texture::Bricks", "asset/texture/bricks.png")
+        .registerTexture("Texture::Windows", "asset/texture/window.png")
+        .registerTexture("Texture::Street", "asset/texture/street.png")
         .registerMeshPipe(Lu::GraphicsPipelineConfig{
             .name = "MeshPipe::Bricks",
-            .capacity = 192,
+            .capacity = 512,
             .vertexShader = "shader/mesh_basic.vert.spv",
             .fragmentShader = "shader/mesh_basic.frag.spv"
         })
         .registerShape<Lu::Shape::Cube>(
             "Mesh::BrickCube",
             glm::vec3(0.5f),
+            glm::vec3(0.0f),
+            glm::vec4(1.0f)
+        )
+        .registerShape<TiledBrickCube>(
+            "Mesh::TiledBrickCube",
+            glm::vec3(0.5f),
+            glm::vec3(0.0f),
+            glm::vec4(1.0f)
+        )
+        .registerShape<Lu::Shape::Square>(
+            "Mesh::WindowPanel",
+            0.5f,
             glm::vec3(0.0f),
             glm::vec4(1.0f)
         )

@@ -33,7 +33,7 @@ find_package(flecs REQUIRED)
 
 #find_package(Jolt REQUIRED)
 
-#find_package(assimp REQUIRED)
+find_package(assimp REQUIRED)
 
 #find_package(recastnavigation CONFIG REQUIRED)
 

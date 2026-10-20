@@ -16,7 +16,8 @@ struct Material {
     vec4 emission;
     float roughness;
     float metallic;
-    vec2 _pad;
+    uint emissionTextureId;
+    uint _pad;
 };
 
 struct Mesh {
@@ -124,9 +125,38 @@ vec3 evaluateLight(Light light, vec3 normal, vec3 viewDirection, float roughness
     return (diffuse + specular) * light.color.a * attenuation;
 }
 
+vec3 applyNormalMap(vec3 surfaceNormal, vec2 texCoord, uint normalTextureId) {
+    vec3 normal = normalize(surfaceNormal);
+    vec3 positionDx = dFdx(inWorldPos);
+    vec3 positionDy = dFdy(inWorldPos);
+    vec2 texCoordDx = dFdx(texCoord);
+    vec2 texCoordDy = dFdy(texCoord);
+    float uvDeterminant = texCoordDx.x * texCoordDy.y -
+        texCoordDx.y * texCoordDy.x;
+    if (abs(uvDeterminant) <= 1e-8) {
+        return normal;
+    }
+
+    vec3 tangent = (positionDx * texCoordDy.y - positionDy * texCoordDx.y) /
+        uvDeterminant;
+    tangent -= normal * dot(normal, tangent);
+    float tangentLengthSquared = dot(tangent, tangent);
+    if (tangentLengthSquared <= 1e-12) {
+        return normal;
+    }
+    tangent *= inversesqrt(tangentLengthSquared);
+    vec3 bitangent = normalize(cross(normal, tangent)) * sign(uvDeterminant);
+    vec3 tangentNormal = texture(
+        textureArray[nonuniformEXT(normalTextureId)], texCoord).xyz * 2.0 - 1.0;
+    return normalize(mat3(tangent, bitangent, normal) * tangentNormal);
+}
+
 void main() {
     Material material = meshes.meshes[inInstanceId].material;
     vec3 normal = normalize(inWorldNormal);
+    if (material.textureIds.y != 0xffffffffu) {
+        normal = applyNormalMap(normal, inTexCoord, material.textureIds.y);
+    }
     vec3 viewDirection = normalize(camera.camPos.xyz - inWorldPos);
     vec3 lighting = material.ambient.rgb;
 
@@ -146,8 +176,13 @@ void main() {
             lightBuffer.lights[lightIndex].transformId >= transforms.transforms.length()) {
             continue;
         }
+        float roughness = material.roughness;
+        if (material.textureIds.z != 0xffffffffu) {
+            roughness = texture(
+                textureArray[nonuniformEXT(material.textureIds.z)], inTexCoord).r;
+        }
         lighting += evaluateLight(
-            lightBuffer.lights[lightIndex], normal, viewDirection, material.roughness);
+            lightBuffer.lights[lightIndex], normal, viewDirection, roughness);
     }
 
     vec4 surfaceColor = vec4(inColor.rgb, inColor.a) * material.albedo;
@@ -157,6 +192,11 @@ void main() {
             inTexCoord);
     }
     vec3 albedo = surfaceColor.rgb;
-    vec3 color = albedo * lighting + material.emission.rgb;
+    vec3 emission = material.emission.rgb;
+    if (material.emissionTextureId != 0xffffffffu) {
+        emission *= texture(
+            textureArray[nonuniformEXT(material.emissionTextureId)], inTexCoord).rgb;
+    }
+    vec3 color = albedo * lighting + emission;
     outColor = vec4(color, surfaceColor.a);
 }
