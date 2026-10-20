@@ -27,8 +27,8 @@ target_link_libraries(lu_example1 PRIVATE
     flecs::flecs
 )
 
-add_executable(lu_example4 main9.cpp)
-target_include_directories(lu_example4 PUBLIC ../src/core ../src/shape ../src/app)
+add_executable(lu_example4 main11.cpp)
+target_include_directories(lu_example4 PUBLIC ../src/core ../src/shape ../src/app ../src/physics)
 target_link_libraries(lu_example4 PRIVATE
     Vulkan::Vulkan
     glm::glm
@@ -36,6 +36,7 @@ target_link_libraries(lu_example4 PRIVATE
     lu_core
     lu_shape
     lu_app
+    lu_physics
     flecs::flecs
 )
 

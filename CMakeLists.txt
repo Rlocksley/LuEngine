@@ -31,7 +31,7 @@ find_package(glm REQUIRED)
 
 find_package(flecs REQUIRED)
 
-#find_package(Jolt REQUIRED)
+find_package(Jolt REQUIRED)
 
 find_package(assimp REQUIRED)
 
@@ -45,7 +45,7 @@ add_subdirectory(./src/core)
 #add_subdirectory(./src/component)
 add_subdirectory(./src/shape)
 add_subdirectory(./src/app)
-#add_subdirectory(./asset)
+add_subdirectory(./src/physics)
 
 #add_subdirectory(./converter)
 #add_subdirectory(./analyzer)
