@@ -13,10 +13,7 @@ The renderer is Vulkan-based.
 ## Loading a Model Prefab
 
 `App::loadModel` imports a model with Assimp and registers each mesh
-geometry and diffuse texture with the renderer. It creates a Flecs prefab with
-`TransformGpu` but no `Transform`; each child contains its mesh and material.
-The default mesh pipeline is `MeshPipe::Simple` (register it before loading),
-or pass a different registered pipeline name as the fourth argument.
+geometry and textures with the renderer. It creates a Flecs prefab.
 
 ```cpp
 Lu::App("Robot scene")
