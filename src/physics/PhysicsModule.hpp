@@ -11,6 +11,9 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseQuery.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Body/BodyLock.h>
 #include <Jolt/Geometry/AABox.h>
 
 #include <algorithm>
@@ -423,6 +426,36 @@ struct PhysicsModule {
             
         world.system("DispatchContacts").kind(postPhysics)
             .run([](flecs::iter& it) { while (it.next()) PhysicsDetail::dispatchContacts(it.world()); });
+
+        // ---- ECS ray requests -> Jolt narrow phase -> ECS hit results --------
+        world.system<const PhysicsRay, PhysicsRayHit>("PhysicsRayCasts")
+            .with<PhysicsRayCast>().kind(postPhysics)
+            .each([](flecs::entity e, const PhysicsRay& request, PhysicsRayHit& hit) {
+                hit = PhysicsRayHit{};
+                const float directionLength = glm::length(request.direction);
+                if (directionLength < 1e-6f || request.maxDistance <= 0.0f) return;
+
+                const glm::vec3 direction = request.direction / directionLength;
+                const ::JPH::RRayCast ray(
+                    ::JPH::RVec3(request.origin.x, request.origin.y, request.origin.z),
+                    Core::toJoltVec3(direction * request.maxDistance));
+                ::JPH::RayCastResult result;
+                auto& physics = Core::GetPhysics();
+                if (!physics.getPhysicsSystem().GetNarrowPhaseQuery().CastRay(ray, result)) return;
+
+                hit.hit = true;
+                hit.bodyId = result.mBodyID;
+                hit.entity = physics.getBodyMap().get(result.mBodyID);
+                hit.distance = result.mFraction * request.maxDistance;
+                const ::JPH::RVec3 hitPoint = ray.GetPointOnRay(result.mFraction);
+                hit.point = Core::toGlmVec3(hitPoint);
+
+                ::JPH::BodyLockRead lock(physics.getPhysicsSystem().GetBodyLockInterface(), result.mBodyID);
+                if (lock.Succeeded()) {
+                    hit.normal = Core::toGlmVec3(lock.GetBody().GetWorldSpaceSurfaceNormal(
+                        result.mSubShapeID2, hitPoint));
+                }
+            });
             
         // character hits are valid for one frame only
         world.system("CleanupCharacterHits").kind(flecs::PostFrame).multi_threaded(false)

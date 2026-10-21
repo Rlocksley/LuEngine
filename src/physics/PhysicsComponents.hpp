@@ -41,6 +41,25 @@ struct PhysicsFocus {};      // e.g. the player / camera: terrain near it gets a
 struct PhysicsDynamic {};    // added automatically from RigidBodyDesc.kind
 struct PhysicsKinematic {};
 
+// Add PhysicsRayCast to an entity and set its PhysicsRay request. PhysicsModule
+// updates PhysicsRayHit after each physics step, making the result usable by
+// ordinary Flecs systems. direction is normalized internally; maxDistance is
+// measured in world units. Inactive bodies are not queryable.
+struct PhysicsRay {
+    glm::vec3 origin{0.0f};
+    glm::vec3 direction{0.0f, 0.0f, -1.0f};
+    float maxDistance{1000.0f};
+};
+struct PhysicsRayCast {};
+struct PhysicsRayHit {
+    bool hit{false};
+    flecs::entity_t entity{0};
+    ::JPH::BodyID bodyId{};
+    float distance{0.0f};
+    glm::vec3 point{0.0f};
+    glm::vec3 normal{0.0f};
+};
+
 // ---- terrain ----------------------------------------------------------------
 struct TerrainChunk {
     glm::ivec2 coord{0};
