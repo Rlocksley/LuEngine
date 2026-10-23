@@ -473,6 +473,46 @@ namespace Lu
 
 
 
+        // Per-frame staging buffer that the producer writes DIRECTLY into (mapped host memory),
+        // followed by one vkCmdCopyBuffer into a device-local buffer. In contrast to DualBuffer
+        // there is no intermediate CPU vector, so large per-frame uploads (skeleton poses)
+        // need exactly one memcpy.
+        template<typename T>
+        struct StagedBuffer : public IBufferResource{
+            uint32_t capacity;
+            std::array<BufferInterface<T>, MAX_FRAMES_IN_FLIGHT> interface;
+            std::array<Buffer<T>, MAX_FRAMES_IN_FLIGHT> buffer;
+
+            explicit StagedBuffer(uint32_t size, VkBufferUsageFlags usage) :
+                capacity(size),
+                interface(makeInterfaces(size, std::make_index_sequence<MAX_FRAMES_IN_FLIGHT>{})),
+                buffer(makeBuffers(size, usage, std::make_index_sequence<MAX_FRAMES_IN_FLIGHT>{})){}
+
+            VkBuffer getVkBuffer(uint32_t frameIndex) const override {return buffer[frameIndex].vkBuffer;}
+            VkBufferUsageFlags getVkBufferUsage() const override {return buffer[0].usage;}
+
+            T* map(const uint32_t frameIndex) { return interface[frameIndex].pMemory; }
+
+            template<typename Cmd>
+            void copyToGpu(const uint32_t frameIndex, const uint32_t count, const Cmd& command){
+                LU_ASSERT(count <= capacity, "StagedBuffer", "copyToGpu", "count exceeds capacity")
+                if(count == 0) return;
+                interface[frameIndex].recordCopyTo(buffer[frameIndex], count, command);
+            }
+
+        private:
+            template<size_t... Frames>
+            static std::array<BufferInterface<T>, MAX_FRAMES_IN_FLIGHT> makeInterfaces(
+                uint32_t size, std::index_sequence<Frames...>) {
+                return {{(static_cast<void>(Frames), BufferInterface<T>(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT))...}};
+            }
+            template<size_t... Frames>
+            static std::array<Buffer<T>, MAX_FRAMES_IN_FLIGHT> makeBuffers(
+                uint32_t size, VkBufferUsageFlags usage, std::index_sequence<Frames...>) {
+                return {{(static_cast<void>(Frames), Buffer<T>(size, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT))...}};
+            }
+        };
+
         template<typename T>
         struct SlotBuffer : public IBufferResource{
             uint32_t sizeGpu;

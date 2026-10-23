@@ -27,7 +27,7 @@ target_link_libraries(lu_example1 PRIVATE
     flecs::flecs
 )
 
-add_executable(lu_example4 main11.cpp)
+add_executable(lu_example4 character_demo.cpp)
 target_include_directories(lu_example4 PUBLIC ../src/core ../src/shape ../src/app ../src/physics)
 target_link_libraries(lu_example4 PRIVATE
     Vulkan::Vulkan
@@ -85,5 +85,18 @@ target_link_libraries(lu_example9 PRIVATE
     lu_core
     lu_shape
     lu_app
+    flecs::flecs
+)
+
+add_executable(lu_character_demo character_demo.cpp)
+target_include_directories(lu_character_demo PUBLIC ../src/core ../src/shape ../src/app ../src/physics)
+target_link_libraries(lu_character_demo PRIVATE
+    Vulkan::Vulkan
+    glm::glm
+    glfw
+    lu_core
+    lu_shape
+    lu_app
+    lu_physics
     flecs::flecs
 )

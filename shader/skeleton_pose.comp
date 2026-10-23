@@ -1,0 +1,80 @@
+#version 450
+// One workgroup per uploaded skeleton, one thread per node.
+// Turns local TRS poses into node (global) matrices and skin matrices and writes them
+// into the SkeletonBuffer: [skin(0..MAX_BONES) | node(0..MAX_BONES)] per skeleton.
+// MAX_BONES must match MAX_BONES_PER_SKELETON in Constant.hpp.
+#define MAX_BONES 128u
+
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+
+struct NodePose {
+    vec4 rotation;   // xyzw
+    vec4 position;
+    vec4 scale;
+};
+
+struct SkeletonUpload {
+    uint slot;
+    uint assetId;
+    uint nodeCount;
+    uint firstPose;
+};
+
+struct SkeletonNode {
+    mat4 inverseBind;
+    int parent;
+    uint isBone;
+    uint pad0;
+    uint pad1;
+};
+
+layout(std430, binding = 0) readonly buffer Uploads   { SkeletonUpload uploads[]; };
+layout(std430, binding = 1) readonly buffer Poses     { NodePose poses[]; };
+layout(std430, binding = 2) readonly buffer Assets    { SkeletonNode nodes[]; };
+layout(std430, binding = 3) writeonly buffer Skeleton { mat4 data[]; };
+
+layout(push_constant) uniform PushConstants {
+    uint uploadCount;
+} pc;
+
+shared mat4 localMatrix[MAX_BONES];
+
+mat4 toMatrix(NodePose p) {
+    vec4 q = p.rotation;
+    float xx = q.x * q.x, yy = q.y * q.y, zz = q.z * q.z;
+    float xy = q.x * q.y, xz = q.x * q.z, yz = q.y * q.z;
+    float wx = q.w * q.x, wy = q.w * q.y, wz = q.w * q.z;
+    return mat4(
+        vec4((1.0 - 2.0 * (yy + zz)) * p.scale.x, (2.0 * (xy + wz)) * p.scale.x, (2.0 * (xz - wy)) * p.scale.x, 0.0),
+        vec4((2.0 * (xy - wz)) * p.scale.y, (1.0 - 2.0 * (xx + zz)) * p.scale.y, (2.0 * (yz + wx)) * p.scale.y, 0.0),
+        vec4((2.0 * (xz + wy)) * p.scale.z, (2.0 * (yz - wx)) * p.scale.z, (1.0 - 2.0 * (xx + yy)) * p.scale.z, 0.0),
+        vec4(p.position.xyz, 1.0));
+}
+
+void main() {
+    uint upload = gl_WorkGroupID.x;
+    if (upload >= pc.uploadCount) return;
+
+    SkeletonUpload u = uploads[upload];
+    uint node = gl_LocalInvocationID.x;
+    bool valid = node < u.nodeCount;
+
+    if (valid) localMatrix[node] = toMatrix(poses[u.firstPose + node]);
+    barrier();
+    if (!valid) return;
+
+    // parents always have a smaller index: walk to the root
+    uint assetBase = u.assetId * MAX_BONES;
+    mat4 global = localMatrix[node];
+    int parent = nodes[assetBase + node].parent;
+    while (parent >= 0) {
+        global = localMatrix[parent] * global;
+        parent = nodes[assetBase + uint(parent)].parent;
+    }
+
+    uint base = u.slot * 2u * MAX_BONES;
+    data[base + MAX_BONES + node] = global;
+    data[base + node] = (nodes[assetBase + node].isBone != 0u)
+        ? global * nodes[assetBase + node].inverseBind
+        : mat4(1.0);
+}

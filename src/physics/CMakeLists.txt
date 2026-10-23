@@ -7,6 +7,7 @@ Physics.hpp
 Physics.cpp
 PhysicsComponents.hpp
 PhysicsModule.hpp
+CharacterCapsule.hpp
 )
 
 target_include_directories(lu_physics PUBLIC ../core)

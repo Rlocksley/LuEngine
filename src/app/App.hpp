@@ -11,6 +11,8 @@
 #include "modul/MultiMeshGpuModule.hpp"
 #include "modul/LightModule.hpp"
 #include "component/Mesh.hpp"
+#include "component/Skeleton.hpp"
+#include "component/AnimationStateMachine.hpp"
 #include "component/InputState.hpp"
 #include "PipelineConfig.hpp"
 #include "Exit.hpp"
@@ -113,6 +115,32 @@ namespace Lu{
             return *this;
         }
 
+        // Pipeline for skinned meshes (vertex shader: shader/skeleton_basic.vert, see Vertex::Skeleton).
+        App& registerSkeletonPipe(const GraphicsPipelineConfig& config){
+            LU_ASSERT(config.name.size() > 0, "App", "registerSkeletonPipe", "GraphicsPipelineConfig.name must be size bigger 0");
+            LU_ASSERT(config.capacity > 0, "App", "registerSkeletonPipe", "GraphicsPipelineConfig::capacity must be bigger 0");
+            LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerSkeletonPipe", "Entity with name: " + config.name + " already exists");
+
+            renderer->createSkeletonPipe(world->entity(config.name.c_str()).id(), config);
+
+            return *this;
+        }
+
+        // Skinned model -> skeleton asset, baked animation clips ("<name>::<clip>") and the prefab "<prefix><name>".
+        App& loadSkeletonModel(const std::string& name, const std::string& filePath,
+            const std::string& prefix = "Skeleton::",
+            const std::string& pipelineName = "SkeletonPipe::Simple",
+            const float bakeFrameRate = 30.0f) {
+            Core::GetAssetManager().loadSkeletonModel(name, filePath, prefix, pipelineName, bakeFrameRate);
+            return *this;
+        }
+
+        // Worker threads of the ECS (animation evaluation is multi threaded). 0 = single threaded.
+        App& threads(const int count){
+            world->set_threads(count);
+            return *this;
+        }
+
         template<typename Module>
         App& importModule(const ModulImportType importType = ModulImportType::enabled){
             moduleFuncs.push_back(
@@ -133,6 +161,8 @@ namespace Lu{
             world->import<Module::Transform>();
             world->import<Module::TransformGpu>();
             world->import<Module::Mesh>();
+            world->import<Module::Skeleton>();
+            world->import<Module::AnimationStateMachine>();
             world->import<Module::MultiMeshGpu>();
             world->import<Module::Material>();
             world->import<Module::Light>();

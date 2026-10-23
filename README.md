@@ -208,3 +208,32 @@ register with
 ``` cpp
 App::registerMultiMeshComputePipe();
 ```
+
+## Skeletal Animation
+
+```cpp
+Lu::App("Character")
+    .threads(4)                                   // animation graphs are evaluated in parallel
+    .registerSkeletonPipe({.name = "SkeletonPipe::Simple", .capacity = 4096,
+        .vertexShader = "shader/skeleton_basic.vert.spv", .fragmentShader = "shader/skeleton_pbr.frag.spv"})
+    .loadSkeletonModel("Hero", "asset/models/hero.fbx")   // skeleton asset + baked clips "Hero::<anim>" + prefab "Skeleton::Hero"
+    .importModule<MyGame>()
+    .run();
+```
+
+* **Skeleton / SkeletonMesh**: the parent (Transform + TransformGpu + `Skeleton`) owns one GPU skeleton;
+  every child with `SkeletonMesh` + `Material` is deformed by it (`nodeIndex = UINT32_MAX`) or rigidly
+  attached to one of its nodes (`nodeIndex = AssetManager::skeletonNode("Hero", "hand_r")`).
+* **AnimationStateMachine**: describe a graph once with `AnimationGraphBuilder` (clips, 1D blend spaces,
+  masked layers/one-shot actions), instantiate with `AnimationStateMachine::create("Graph")`, drive it with
+  `setParam` / `setState` / `crossFade`. Cache `StateId`/`ParamId` (the string overloads are for setup code).
+* **CharacterCapsule** (`src/physics/CharacterCapsule.hpp`): ECS view of a Jolt `CharacterVirtual`.
+  Write input (`setMove`, `turn`, `jump`), read state (`moveSpeed`, `onGround`, ...). See `examples/character_demo.cpp`.
+* **Shader API**: `skeleton_basic.vert` reads the SkeletonBuffer (set 0, binding 7):
+  `[skin matrices (node * inverseBind) | node matrices]` per skeleton, `MATS_PER_SKELETON = 2 * MAX_BONES_PER_SKELETON`.
+  `MAX_BONES_PER_SKELETON` must match in `Constant.hpp` and the four `skeleton_*` shaders.
+
+Performance design: clips are baked to fixed-rate frames (O(1) sampling); states/params/masks are integer ids;
+the state tree is evaluated in a per-thread scratch stack (no heap allocation); poses travel as 48 byte local TRS
+through a lock-free triple buffer (ECS workers reserve space atomically and write in place); the GPU builds node
+hierarchy + skin matrices (`skeleton_pose.comp`, one workgroup per skeleton), so the CPU does no matrix math.

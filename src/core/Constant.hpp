@@ -25,6 +25,20 @@ namespace Lu{
         const uint32_t MAX_TEXTURES = 256;
         const uint32_t MAX_LIGHTS = 1024;
 
+        // ---- Skeletons ----------------------------------------------------
+        // careful: MAX_BONES_PER_SKELETON must match the shaders
+        // (skeleton_pose.comp, skeleton_basic.vert, skeleton_depth.vert, skeleton_cull.comp)
+        const uint32_t MAX_BONES_PER_SKELETON = 128;          // nodes (bones + attach nodes) per skeleton asset
+        const uint32_t MATS_PER_SKELETON = 2 * MAX_BONES_PER_SKELETON; // [skin matrices | node matrices]
+        const uint32_t MAX_SKELETON_ASSETS = 256;
+        const uint32_t MAX_SKELETONS = 4096;                  // live skeleton instances
+        const uint32_t MAX_SKELETON_POSES_PER_FRAME = MAX_SKELETONS * 64; // node poses uploaded per frame
+        const uint32_t MAX_SKELETON_MESHES = 1024 * 64;
+        const uint32_t MAX_SKELETON_MESH_INFOS = 1024;
+        const uint32_t MAX_SKELETON_VERTEX_BUFFER_SIZE = 1024 * 512;
+        const uint32_t MAX_SKELETON_INDEX_BUFFER_SIZE = 1024 * 1024;
+        const uint32_t MAX_SKELETON_MESH_PIPELINES = 64;
+
 
         //careful: 
         //for this constants 

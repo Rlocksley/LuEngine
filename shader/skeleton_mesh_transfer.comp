@@ -1,0 +1,47 @@
+#version 450
+
+struct Material{
+    uvec4 texturesIds;
+    vec4 albedo;
+    vec4 ambient;
+    vec4 emission;
+    float roughness;
+    float metallic;
+    uint emissionTextureId;
+    uint pad0;
+};
+
+struct SkeletonMesh {
+    Material material;
+    uint transformId;
+    uint pipelineId;
+    uint meshInfoId;
+    uint skeletonId;
+    uint nodeIndex;     // 0xFFFFFFFF = deformed, otherwise attached to this node
+    uint valid;
+    uint pad0;
+    uint pad1;
+};
+
+// Match C++ SkeletonMeshInstance: SkeletonMesh (112) + id and padding (16).
+struct SkeletonMeshInstance {
+    SkeletonMesh mesh;
+    uint id;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer InputBuffer { SkeletonMeshInstance instances[]; };
+layout(std430, binding = 1) writeonly buffer MeshBuffer { SkeletonMesh meshes[]; };
+
+layout(push_constant) uniform PushConstants { uint instanceBufferSize; } pc;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= pc.instanceBufferSize) return;
+    SkeletonMeshInstance instance = instances[index];
+    meshes[instance.id] = instance.mesh;
+}

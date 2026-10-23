@@ -153,11 +153,11 @@ namespace Lu
                 return mouseButtons[static_cast<std::size_t>(button)].lastHoldDuration;
             }
 
-            glm::vec2 getCursorPosition(){
+            glm::vec2 getCursorPosition() const{
                 return cursor.position;
             }
 
-            glm::vec2 getCursorDeltaPosition(){
+            glm::vec2 getCursorDeltaPosition() const {
                 return cursor.deltaPosition;
             }
         };

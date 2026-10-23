@@ -87,7 +87,42 @@ namespace Lu{
             CameraData cameraData;
         };
 
-        using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera>;
+        // ---- skeletons ------------------------------------------------------------
+        // CreateSkeleton / CreateSkeletonMesh are "upsert": the first request creates the
+        // GPU object, later requests for the same entity update it (new asset, material,
+        // pipeline, attach node, ...). Poses are NOT sent as requests but through the
+        // skeleton pose triple buffer (see TripleBuffers.hpp) as UpdateSkeletonPose headers.
+        struct CreateSkeleton{
+            flecs::entity_t entity;     // parent entity (owns Transform + Skeleton)
+            flecs::entity_t asset;      // skeleton asset entity (registered by loadSkeletonModel)
+        };
+
+        struct DestroySkeleton{
+            flecs::entity_t entity;
+        };
+
+        struct CreateSkeletonMesh{
+            flecs::entity_t parent;     // entity with Transform + Skeleton
+            flecs::entity_t entity;
+            flecs::entity_t mesh;       // skeleton geometry entity
+            flecs::entity_t pipe;
+            Material material;
+            uint32_t nodeIndex;         // UINT32_MAX = deformed, otherwise attached to that node
+        };
+
+        struct DestroySkeletonMesh{
+            flecs::entity_t entity;
+        };
+
+        // Header of one skeleton pose inside a SkeletonPoseSnapshot.
+        struct UpdateSkeletonPose{
+            flecs::entity_t entity{0};
+            uint32_t firstPose{0};
+            uint32_t nodeCount{0};
+        };
+
+        using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera,
+            CreateSkeleton, DestroySkeleton, CreateSkeletonMesh, DestroySkeletonMesh>;
 
     }
 

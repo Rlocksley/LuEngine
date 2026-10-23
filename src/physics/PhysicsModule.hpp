@@ -306,6 +306,11 @@ struct PhysicsModule {
         auto prePhysics  = world.entity("PrePhysics").add(flecs::Phase).depends_on(flecs::PreUpdate);
         auto physicsStep = world.entity("PhysicsStep").add(flecs::Phase).depends_on(prePhysics);
         auto postPhysics = world.entity("PostPhysics").add(flecs::Phase).depends_on(physicsStep);
+        // Module entities are scoped under PhysicsModule. Publish aliases so
+        // other modules can look up these phases from the world root.
+        world.use(prePhysics, "PrePhysics");
+        world.use(physicsStep, "PhysicsStep");
+        world.use(postPhysics, "PostPhysics");
         world.entity(flecs::OnUpdate).depends_on(postPhysics);
 
         // ---- resource cleanup via hooks (also fires on entity destruct) ------

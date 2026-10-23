@@ -9,6 +9,8 @@
 #include "LightPackage.hpp"
 #include "MeshPackage.hpp"
 #include "MultiMeshPackage.hpp"
+#include "SkeletonPackage.hpp"
+#include "AnimationLibrary.hpp"
 #include "TexturePackage.hpp"
 #include "Channel.hpp"
 #include "FramerateMonitor.hpp"
@@ -27,6 +29,15 @@ namespace Lu{
 
             using MeshGeometryEntity = flecs::entity_t;
             void createMeshGeometry(const MeshGeometryEntity entity, const std::vector<Vertex::Mesh>& vb, const std::vector<uint32_t> ib);
+
+            using SkeletonPipeEntity = flecs::entity_t;
+            void createSkeletonPipe(const SkeletonPipeEntity entity, const GraphicsPipelineConfig& config);
+
+            using SkeletonGeometryEntity = flecs::entity_t;
+            void createSkeletonGeometry(const SkeletonGeometryEntity entity, const std::vector<Vertex::Skeleton>& vb, const std::vector<uint32_t>& ib);
+
+            using SkeletonAssetEntity = flecs::entity_t;
+            void createSkeletonAsset(const SkeletonAssetEntity entity, const SkeletonAsset& asset);
 
             using MultiMeshPipeEntity = flecs::entity_t;
             void createMultiMeshPipe(const MultiMeshPipeEntity entity, const GraphicsPipelineConfig& config);
@@ -57,6 +68,8 @@ namespace Lu{
             TexturePackage texture;
             MeshPackage mesh;
             MultiMeshPackage multiMesh;
+            GeometryPackage<Vertex::Skeleton> skeletonGeometry;
+            SkeletonPackage skeleton;
             std::deque<EcsRequest::CreateMultiMesh> pendingMultiMeshCreates;
             
             static void beginRendering(const Command& cmd);

@@ -61,6 +61,8 @@ CameraPackage.hpp
 CameraPackage.cpp
 TransformPackage.hpp
 MeshPackage.hpp
+SkeletonPackage.hpp
+AnimationLibrary.hpp
 TripleBuffer.hpp
 Channel.hpp
 )

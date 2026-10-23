@@ -23,7 +23,15 @@ namespace Lu{
             ),
             texture(),
             mesh(camera, lights, transform, texture, meshGeometry),
-            multiMesh(camera, transform, meshGeometry) {
+            multiMesh(camera, transform, meshGeometry),
+            skeletonGeometry(
+                MAX_SKELETON_VERTEX_BUFFER_SIZE,
+                MAX_SKELETON_INDEX_BUFFER_SIZE,
+                MAX_VERTICES_PER_MESH,
+                MAX_INDICES_PER_MESH,
+                MAX_SKELETON_MESH_INFOS
+            ),
+            skeleton(camera, lights, transform, texture, skeletonGeometry) {
         }
 
         Renderer::~Renderer() {
@@ -68,6 +76,18 @@ namespace Lu{
             meshGeometry.addGeometry(entity, vb, ib);
         }
 
+        void Renderer::createSkeletonPipe(const flecs::entity_t entity, const GraphicsPipelineConfig& config){
+            skeleton.createSkeletonPipeline(entity, config);
+        }
+
+        void Renderer::createSkeletonGeometry(const flecs::entity_t entity, const std::vector<Vertex::Skeleton>& vb, const std::vector<uint32_t>& ib){
+            skeletonGeometry.addGeometry(entity, vb, ib);
+        }
+
+        void Renderer::createSkeletonAsset(const flecs::entity_t entity, const SkeletonAsset& asset){
+            skeleton.createSkeletonAsset(entity, asset);
+        }
+
         void Renderer::createMultiMeshPipe(const flecs::entity_t entity, const GraphicsPipelineConfig& config){
             multiMesh.createGraphicsPipeline(entity, config);
         }
@@ -79,11 +99,13 @@ namespace Lu{
         void Renderer::createTexture(const TextureEntity entity, const std::string& filePath){
             texture.createTexture(entity, filePath);
             mesh.updateDescriptorSetWrites();
+            skeleton.updateDescriptorSetWrites();
         }
 
         void Renderer::createTexture(const TextureEntity entity, TextureCpu&& textureCpu){
             texture.createTexture(entity, std::move(textureCpu));
             mesh.updateDescriptorSetWrites();
+            skeleton.updateDescriptorSetWrites();
         }
         
         void Renderer::processEcsRequests(){
@@ -149,6 +171,35 @@ namespace Lu{
                             lights.destroyLight(req.entity);
                         },
                         
+                        [&](const EcsRequest::CreateSkeleton& req){
+                            skeleton.createSkeleton(req.entity, req.asset);
+                        },
+
+                        [&](const EcsRequest::DestroySkeleton& req){
+                            skeleton.destroySkeleton(req.entity);
+                        },
+
+                        [&](const EcsRequest::CreateSkeletonMesh& req){
+                            uint32_t textureIds[5]{UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};
+                            for(uint32_t i = 0; i < 5; i++){
+                                if(req.material.textures[i] != 0){
+                                    textureIds[i] = texture.getTextureId(req.material.textures[i]);
+                                }
+                            }
+                            Material material(textureIds, req.material.albedo, req.material.ambient,
+                                req.material.emission, req.material.roughness, req.material.metallic);
+                            skeleton.createSkeletonMesh(
+                                req.entity, req.parent, req.pipe,
+                                transform.getTransformId(req.parent),
+                                skeletonGeometry.getGeometryInfoId(req.mesh),
+                                material, req.nodeIndex
+                            );
+                        },
+
+                        [&](const EcsRequest::DestroySkeletonMesh& req){
+                            skeleton.destroySkeletonMesh(req.entity);
+                        },
+
                         [&](const EcsRequest::UpdateCamera& req){
                             camera.update(req);
                         }
@@ -176,10 +227,14 @@ namespace Lu{
             // established or removed entity-to-transform ID mappings.
             transform.updateTransforms();
 
+            // Latest animated skeleton poses (triple buffer) -> staging buffer of this frame
+            skeleton.updatePoses(frameIndex);
+
             //Writes the Dirty Elements to the InstanceBuffer
             transform.collectDirty(frameIndex);
             mesh.collectDirty(frameIndex);
             multiMesh.collectDirty(frameIndex);
+            skeleton.collectDirty(frameIndex);
         }
 
         void Renderer::record(){
@@ -206,6 +261,8 @@ namespace Lu{
             lights.copy(frameIndex, cmd);
             mesh.copy(frameIndex, cmd);
             multiMesh.copy(frameIndex, cmd);
+            skeletonGeometry.copy(frameIndex, cmd);
+            skeleton.copy(frameIndex, cmd);
             
             //Pipeline Barrier
             copyBarrier(cmd);
@@ -217,6 +274,7 @@ namespace Lu{
             transform.transfer(frameIndex, cmd);
             mesh.transfer(frameIndex, cmd);
             multiMesh.transfer(frameIndex, cmd);
+            skeleton.transfer(frameIndex, cmd);   // poses -> SkeletonBuffer, mesh instances
 
             //Pipeline Barrier
             transferBarrier(cmd);
@@ -224,6 +282,7 @@ namespace Lu{
             //Mesh Culling
             mesh.cull(frameIndex, cmd);
             multiMesh.cull(frameIndex, cmd);
+            skeleton.cull(frameIndex, cmd);
 
             //Pipeline Barrier
             cullBarrier(cmd);
@@ -238,6 +297,7 @@ namespace Lu{
             // Render mesh depth for tile light culling.
             beginDepthRendering(cmd);
             mesh.depth(frameIndex, meshGeometry, cmd);
+            skeleton.depth(frameIndex, skeletonGeometry, cmd);
             endDepthRendering(cmd);
 
             // Cull lights against the depth prepass.
@@ -257,6 +317,7 @@ namespace Lu{
             //Indirect Draws of all MeshPipelines
             mesh.draw(frameIndex, meshGeometry, cmd);
             multiMesh.draw(frameIndex, meshGeometry, cmd);
+            skeleton.draw(frameIndex, skeletonGeometry, cmd);
 
             //end dynamic rendering
             endRendering(cmd);
