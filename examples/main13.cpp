@@ -25,7 +25,7 @@ using Lu::Component::AnimationStateMachine;
 using Lca::Component::CharacterCapsule;
 
 constexpr const char* kModel = "Wizard";
-constexpr const char* kModelFile = "asset\\king\\King.gltf";
+constexpr const char* kModelFile = "asset\\adventurer\\Adventurer.gltf";
 constexpr const char* kUpperBodyRoot = "Torso";
 
 // Visual offset of the skeleton meshes relative to the capsule (MeshTransform, local to the Transform).
@@ -141,7 +141,8 @@ struct CharacterDemo {
                 .yaw = 0.0f,
                 .pitch = 0.15f,
                 .distance = 7.0f,
-                .farClip = 250.0f})
+                .farClip = 250.0f,
+                .targetOffset = glm::vec3(0,0.5,0)})
             .set<Transform>({});
     }
 };

@@ -34,31 +34,11 @@ namespace Lu{
             static void correctTriangleWinding(
                 const std::vector<VertexType>& vertices,
                 std::vector<uint32_t>& indices) {
-                // Assimp preserves source winding, which is not consistent across all
-                // glTF exporters. Compare each face normal with its vertex normals and
-                // reverse the whole mesh when the majority indicate opposite winding.
-                double alignment = 0.0;
                 for(size_t i = 0; i + 2 < indices.size(); i += 3) {
-                    const VertexType& a = vertices[indices[i]];
-                    const VertexType& b = vertices[indices[i + 1]];
-                    const VertexType& c = vertices[indices[i + 2]];
-                    const glm::vec3 faceNormal = glm::cross(b.position - a.position,
-                        c.position - a.position);
-                    const glm::vec3 vertexNormal = a.normal + b.normal + c.normal;
-                    const float faceLength = glm::length(faceNormal);
-                    const float normalLength = glm::length(vertexNormal);
-                    if(faceLength > 1e-8f && normalLength > 1e-8f) {
-                        alignment += glm::dot(faceNormal / faceLength,
-                            vertexNormal / normalLength);
-                    }
-                }
-
-                if(alignment < 0.0) {
-                    for(size_t i = 0; i + 2 < indices.size(); i += 3) {
-                        std::swap(indices[i + 1], indices[i + 2]);
-                    }
+                    std::swap(indices[i + 1], indices[i + 2]);
                 }
             }
+        
 
             flecs::entity loadMaterialTexture(const std::string& modelName,
                 const std::string& filePath, const aiScene& scene,
