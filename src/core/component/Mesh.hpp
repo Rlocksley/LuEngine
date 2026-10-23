@@ -45,6 +45,17 @@ namespace Lu{
                         e.add<Component::MeshGpuDirty>();
                     });
 
+                // The GPU Mesh stores the parent's MeshTransform slot (localTransformId). When the parent gets or
+                // loses its MeshTransform, re-send all child meshes so they pick up the new slot (or the identity).
+                world.observer<const Component::MeshTransform>()
+                    .event(flecs::OnAdd)
+                    .event(flecs::OnRemove)
+                    .each([](flecs::entity parent, const Component::MeshTransform&) {
+                        parent.children([](flecs::entity child) {
+                            if (child.has<Component::Mesh>()) child.add<Component::MeshGpuDirty>();
+                        });
+                    });
+
                 world.system<const Component::Mesh, const Component::Material>()
                 .with<Component::MeshGpuDirty>()
                 .run([](flecs::iter it){

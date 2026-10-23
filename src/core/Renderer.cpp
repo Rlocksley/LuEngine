@@ -120,6 +120,14 @@ namespace Lu{
                         [&](const EcsRequest::DestroyTransform& req){
                             transform.destroyTransform(req.entity);    
                         },
+
+                        [&](const EcsRequest::CreateMeshTransform& req){
+                            transform.createLocalTransform(req.entity, req.transform);
+                        },
+
+                        [&](const EcsRequest::DestroyMeshTransform& req){
+                            transform.destroyLocalTransform(req.entity);
+                        },
                         
                         [&](const EcsRequest::CreateMesh& req){
                             uint32_t textureIds[5]{UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};
@@ -142,6 +150,7 @@ namespace Lu{
                             mesh.createMesh(
                                 req.entity, req.pipe,
                                 transform.getTransformId(req.parent),
+                                transform.getLocalTransformId(req.parent),
                                 meshGeometry.getGeometryInfoId(req.mesh),
                                 material
                             );
@@ -191,6 +200,7 @@ namespace Lu{
                             skeleton.createSkeletonMesh(
                                 req.entity, req.parent, req.pipe,
                                 transform.getTransformId(req.parent),
+                                transform.getLocalTransformId(req.parent),
                                 skeletonGeometry.getGeometryInfoId(req.mesh),
                                 material, req.nodeIndex
                             );

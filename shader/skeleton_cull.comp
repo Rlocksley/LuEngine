@@ -43,7 +43,7 @@ struct Mesh {
     uint skeletonId;
     uint nodeIndex;     // 0xFFFFFFFF = deformed, otherwise attached to this node
     uint valid;
-    uint pad0;
+    uint localTransformId;   // MeshTransform slot, 0 = identity
     uint pad1;
 };
 
@@ -161,6 +161,7 @@ void main() {
     //fetch pointers
     MeshInfo meshInfo = meshInfos.meshInfos[mesh.meshInfoId];
     Transform transform = transforms.transforms[mesh.transformId];
+    Transform local = transforms.transforms[mesh.localTransformId];   // MeshTransform (slot 0 = identity)
 
     //Transform Bounding Sphere to World Space
     vec3 localCenter = meshInfo.boundingSphere.xyz;
@@ -171,9 +172,12 @@ void main() {
         localCenter = (nodeMatrix * vec4(localCenter, 1.0)).xyz;
         radiusScale = 1.0;
     }
-    vec3 worldCenter = (transform.model * vec4(localCenter, 1.0)).xyz;
+    vec3 worldCenter = (transform.model * local.model * vec4(localCenter, 1.0)).xyz;
     vec4 scale = transform.scale;
-    float worldRadius = meshInfo.boundingSphere.w * radiusScale * max(max(abs(scale.x), abs(scale.y)), abs(scale.z));
+    vec4 localScale = local.scale;
+    float worldRadius = meshInfo.boundingSphere.w * radiusScale
+        * max(max(abs(scale.x), abs(scale.y)), abs(scale.z))
+        * max(max(abs(localScale.x), abs(localScale.y)), abs(localScale.z));
 
     //Frustum Cull with World Sphere
     if (isVisible(vec4(worldCenter, worldRadius))) {

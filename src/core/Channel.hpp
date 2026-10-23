@@ -25,6 +25,21 @@ namespace Lu{
             flecs::entity_t entity;            
         };
 
+        // MeshTransform of an entity: gets its own slot in the GPU transform buffer.
+        struct CreateMeshTransform{
+            flecs::entity_t entity;            
+            Component::MeshTransform transform;
+        };
+
+        struct UpdateMeshTransform{
+            flecs::entity_t entity;            
+            Component::MeshTransform transform;
+        };
+
+        struct DestroyMeshTransform{
+            flecs::entity_t entity;            
+        };
+
         struct Material{
             flecs::entity_t textures[5]{};
             glm::vec4 albedo{1.f, 1.f, 1.f, 1.f};
@@ -121,7 +136,7 @@ namespace Lu{
             uint32_t nodeCount{0};
         };
 
-        using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera,
+        using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMeshTransform, DestroyMeshTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera,
             CreateSkeleton, DestroySkeleton, CreateSkeletonMesh, DestroySkeletonMesh>;
 
     }

@@ -19,6 +19,7 @@
 #include "component/TransformGpu.hpp"
 
 using Lu::Component::Transform;
+using Lu::Component::MeshTransform;
 using Lu::Component::InputState;
 using Lu::Component::AnimationStateMachine;
 using Lca::Component::CharacterCapsule;
@@ -26,6 +27,12 @@ using Lca::Component::CharacterCapsule;
 constexpr const char* kModel = "Wizard";
 constexpr const char* kModelFile = "asset\\king\\King.gltf";
 constexpr const char* kUpperBodyRoot = "Torso";
+
+// Visual offset of the skeleton meshes relative to the capsule (MeshTransform, local to the Transform).
+// The Transform of the hero is driven by the capsule (Jolt); the MeshTransform is never touched by physics.
+constexpr float kMeshScale = 0.6f;          // GLB is ~3 m tall; capsule is 1.8 m
+constexpr float kMeshHeight = 0.0f;         // meters up (+) / down (-) relative to the capsule's feet
+constexpr float kMeshFrontYawDegrees = 180; // turn the model's front relative to the capsule's forward (180 = model looks to -Z)
 
 struct Hero {};
 
@@ -54,7 +61,13 @@ struct CharacterDemo {
         world.entity("Hero")
             .is_a(world.lookup((std::string("Skeleton::") + kModel).c_str()))
             .add<Hero>()
-            .set<Transform>({glm::vec3(0.0f, 0.0f, 0.0f), 0.0f, glm::vec3(0, 1, 0), glm::vec3(0.6f)}) // GLB is ~3 m tall; capsule is 1.8 m
+            // body: position / yaw come from the CharacterCapsule (Jolt), scale stays 1 so the capsule sizes are meters
+            .set<Transform>({glm::vec3(0.0f, 0.0f, 0.0f), 0.0f, glm::vec3(0, 1, 0), glm::vec3(1.0f)})
+            // visuals: all SkeletonMeshes of the hero are transformed by Transform * MeshTransform.
+            // Change it at runtime with:  hero.get_mut<MeshTransform>().position.y += 0.1f; hero.modified<MeshTransform>();
+            .set<MeshTransform>(MeshTransform(glm::vec3(0.0f, kMeshHeight, 0.0f),
+                                              glm::radians(kMeshFrontYawDegrees), glm::vec3(0, 1, 0),
+                                              glm::vec3(kMeshScale)))
             .set<AnimationStateMachine>(AnimationStateMachine::create("HeroGraph"))
             .set<CharacterCapsule>({.radius = 0.35f, .halfHeight = 0.55f})
             .add<Lca::Component::PhysicsFocus>();

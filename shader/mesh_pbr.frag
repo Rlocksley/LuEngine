@@ -28,6 +28,10 @@ struct Mesh {
     uint pipelineId;
     uint meshInfoId;
     uint valid;
+    uint localTransformId;   // MeshTransform slot, 0 = identity
+    uint pad1;
+    uint pad2;
+    uint pad3;
 };
 
 struct Transform {

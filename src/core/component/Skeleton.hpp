@@ -12,6 +12,10 @@
 //  parent entity   : Transform + TransformGpu + Skeleton (+ AnimationStateMachine)
 //  child entities  : SkeletonMesh + Material       -> deformed by (or attached to) the parent's skeleton
 //
+//  Optional MeshTransform on the parent: offset / facing / scale of all its SkeletonMeshes local to
+//  the parent's Transform (world = Transform * MeshTransform * skinning * vertex), e.g. to fit a model
+//  to a CharacterCapsule. Without it the meshes use only the Transform.
+//
 //  loadSkeletonModel() builds exactly this as a prefab ("Skeleton::<name>").
 //  Attach an extra mesh (a sword) to a node at runtime:
 //
@@ -113,6 +117,16 @@ namespace Lu{
                     .event(flecs::OnAdd)
                     .each([](flecs::entity e){
                         e.add<Component::SkeletonMeshGpuDirty>();
+                    });
+
+                // Same as for Mesh: the GPU SkeletonMesh stores the parent's MeshTransform slot.
+                world.observer<const Component::MeshTransform>()
+                    .event(flecs::OnAdd)
+                    .event(flecs::OnRemove)
+                    .each([](flecs::entity parent, const Component::MeshTransform&){
+                        parent.children([](flecs::entity child){
+                            if(child.has<Component::SkeletonMesh>()) child.add<Component::SkeletonMeshGpuDirty>();
+                        });
                     });
 
                 world.system<const Component::SkeletonMesh, const Component::Material>("EcsRequest::CreateSkeletonMesh System")

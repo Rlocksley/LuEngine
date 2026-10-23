@@ -39,12 +39,27 @@ namespace Lu {
                 return result;
             }
         };
-}
+
+        // Transform of the visual part (Mesh / SkeletonMesh children) of an entity, LOCAL to the
+        // entity's Transform:  world = Transform * MeshTransform * (skinning) * vertex.
+        //
+        //   Transform      : the "body" - written by physics (CharacterCapsule, rigid bodies, ...)
+        //   MeshTransform  : offset / facing / scale of the visuals relative to that body
+        //
+        // Optional. Without a MeshTransform the meshes use only the Transform (= identity offset).
+        // It needs the TransformGpu tag on the same entity, like Transform.
+        struct MeshTransform : Transform {
+            using Transform::Transform;
+            MeshTransform() = default;
+            MeshTransform(const Transform& other) : Transform(other) {}
+        };
+    }
 
     namespace Module{
         struct Transform{
             Transform(flecs::world& world){
                 world.component<Component::Transform>();
+                world.component<Component::MeshTransform>();
 
             }
         };

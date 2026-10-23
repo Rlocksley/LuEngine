@@ -16,14 +16,15 @@ namespace Lu{
             uint32_t skeletonId{0};
             uint32_t nodeIndex{UINT32_MAX};
             uint32_t valid{0};
-            uint32_t _pad0{0};
+            uint32_t localTransformId{0};   // MeshTransform slot, 0 = identity slot (no MeshTransform)
             uint32_t _pad1{0};
 
             SkeletonMesh() = default;
-            SkeletonMesh(const Material& material, uint32_t transformId, uint32_t pipelineId,
-                         uint32_t meshInfoId, uint32_t skeletonId, uint32_t nodeIndex):
+            SkeletonMesh(const Material& material, uint32_t transformId, uint32_t localTransformId,
+                         uint32_t pipelineId, uint32_t meshInfoId, uint32_t skeletonId, uint32_t nodeIndex):
                 material(material), transformId(transformId), pipelineId(pipelineId),
-                meshInfoId(meshInfoId), skeletonId(skeletonId), nodeIndex(nodeIndex), valid(1) {}
+                meshInfoId(meshInfoId), skeletonId(skeletonId), nodeIndex(nodeIndex), valid(1),
+                localTransformId(localTransformId) {}
         };
 
         using SkeletonMeshId = uint32_t;

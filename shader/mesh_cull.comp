@@ -41,6 +41,10 @@ struct Mesh {
     uint pipelineId;       
     uint meshInfoId;
     uint valid;
+    uint localTransformId;   // MeshTransform slot, 0 = identity
+    uint pad1;
+    uint pad2;
+    uint pad3;
 };
 
 // Fits VkDrawIndexedIndirectCommand
@@ -148,11 +152,15 @@ void main() {
     //fetch pointers
     MeshInfo meshInfo = meshInfos.meshInfos[mesh.meshInfoId];
     Transform transform = transforms.transforms[mesh.transformId];
+    Transform local = transforms.transforms[mesh.localTransformId];   // MeshTransform (slot 0 = identity)
 
-    //Transform Bounding Sphere to World Space
-    vec3 worldCenter = (transform.model * vec4(meshInfo.boundingSphere.xyz, 1.0)).xyz;
+    //Transform Bounding Sphere to World Space: Transform * MeshTransform * center
+    vec3 worldCenter = (transform.model * local.model * vec4(meshInfo.boundingSphere.xyz, 1.0)).xyz;
     vec4 scale = transform.scale;
-    float worldRadius = meshInfo.boundingSphere.w * max(max(abs(scale.x), abs(scale.y)), abs(scale.z));
+    vec4 localScale = local.scale;
+    float worldRadius = meshInfo.boundingSphere.w
+        * max(max(abs(scale.x), abs(scale.y)), abs(scale.z))
+        * max(max(abs(localScale.x), abs(localScale.y)), abs(localScale.z));
 
     //Frustum Cull with World Sphere
     if (isVisible(vec4(worldCenter, worldRadius))) {

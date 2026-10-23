@@ -36,6 +36,10 @@ struct Mesh {
     uint pipelineId;       
     uint meshInfoId;
     uint valid;
+    uint localTransformId;   // MeshTransform slot, 0 = identity
+    uint pad1;
+    uint pad2;
+    uint pad3;
 };
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
@@ -65,11 +69,14 @@ layout(set = 0, binding = 5) readonly buffer MeshBuffer {
 void main() {
     Mesh mesh = meshes.meshes[gl_InstanceIndex];
     Transform transform = transforms.transforms[mesh.transformId];
+    Transform local = transforms.transforms[mesh.localTransformId];   // MeshTransform (slot 0 = identity)
+    mat4 model = transform.model * local.model;
+    mat4 normalMatrix = transform.normal * local.normal;              // inverse-transpose of a product
 
-    vec4 worldPos = transform.model * vec4(inPosition, 1.0);
+    vec4 worldPos = model * vec4(inPosition, 1.0);
     gl_Position = camera.viewProjection * worldPos;
 
-    outWorldNormal = normalize((transform.normal * vec4(inNormal, 0.0)).xyz);
+    outWorldNormal = normalize((normalMatrix * vec4(inNormal, 0.0)).xyz);
     outColor = inColor;
     outTexCoord = inTexCoord;
     outInstanceId = gl_InstanceIndex;

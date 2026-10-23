@@ -19,7 +19,7 @@ struct SkeletonMesh {
     uint skeletonId;
     uint nodeIndex;     // 0xFFFFFFFF = deformed, otherwise attached to this node
     uint valid;
-    uint pad0;
+    uint localTransformId;   // MeshTransform slot, 0 = identity
     uint pad1;
 };
 

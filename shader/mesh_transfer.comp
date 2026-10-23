@@ -17,13 +17,17 @@ struct Mesh {
     uint pipelineId;       
     uint meshInfoId;
     uint valid;
+    uint localTransformId;   // MeshTransform slot, 0 = identity
+    uint pad1;
+    uint pad2;
+    uint pad3;
 };
 
 // Struktur für eine einzelne Instanz im Eingabepuffer
 struct MeshInstance {
     Mesh mesh;
     uint id;
-    // Match C++ MeshInstance: Mesh (96) + id and padding (16).
+    // Match C++ MeshInstance: Mesh (112) + id and padding (16).
     uint pad0;
     uint pad1;
     uint pad2;

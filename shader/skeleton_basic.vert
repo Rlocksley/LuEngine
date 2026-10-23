@@ -47,7 +47,7 @@ struct SkeletonMesh {
     uint skeletonId;
     uint nodeIndex;
     uint valid;
-    uint pad0;
+    uint localTransformId;   // MeshTransform slot, 0 = identity
     uint pad1;
 };
 
@@ -73,6 +73,9 @@ layout(set = 0, binding = 7) readonly buffer SkeletonBuffer { mat4 data[]; } ske
 void main() {
     SkeletonMesh mesh = meshes.meshes[gl_InstanceIndex];
     Transform transform = transforms.transforms[mesh.transformId];
+    Transform local = transforms.transforms[mesh.localTransformId];   // MeshTransform (slot 0 = identity)
+    mat4 model = transform.model * local.model;
+    mat4 normalMatrix = transform.normal * local.normal;              // inverse-transpose of a product
     uint base = mesh.skeletonId * MATS_PER_SKELETON;
 
     mat4 skinMatrix;
@@ -90,10 +93,10 @@ void main() {
     vec4 skinnedPos = skinMatrix * vec4(inPosition, 1.0);
     vec3 skinnedNormal = mat3(skinMatrix) * inNormal;
 
-    vec4 worldPos = transform.model * skinnedPos;
+    vec4 worldPos = model * skinnedPos;
     gl_Position = camera.viewProjection * worldPos;
 
-    outWorldNormal = normalize((transform.normal * vec4(skinnedNormal, 0.0)).xyz);
+    outWorldNormal = normalize((normalMatrix * vec4(skinnedNormal, 0.0)).xyz);
     outColor = inColor;
     outTexCoord = inTexCoord;
     outInstanceId = gl_InstanceIndex;

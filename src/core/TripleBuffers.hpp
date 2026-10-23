@@ -13,6 +13,12 @@ namespace Lu{
         return transforms;
     }
 
+        // Same as above, for the MeshTransform components (local transform of the meshes).
+        inline TripleBuffer<std::vector<EcsRequest::UpdateMeshTransform>>& GetMeshTransformTripleBuffer(){
+            static TripleBuffer<std::vector<EcsRequest::UpdateMeshTransform>> meshTransforms;
+            return meshTransforms;
+        }
+
         // One ECS frame of skeleton poses. Both arrays are allocated once at full capacity.
         // The ECS worker threads reserve space with the two atomic cursors and write
         // their blended local poses directly into `poses` (no vectors, no locks); a single

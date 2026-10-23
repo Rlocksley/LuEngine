@@ -9,6 +9,8 @@ namespace Lu{
 
         struct TransformGpuDirty{};
 
+        struct MeshTransformGpuDirty{};
+
     }
 
 

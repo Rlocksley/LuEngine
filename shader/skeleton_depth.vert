@@ -9,7 +9,7 @@ layout(location = 3) in int inNodeIndex;
 
 struct Transform { mat4 model; mat4 normal; vec4 scale; vec4 rotation; vec4 position; };
 struct Material { uvec4 texturesIds; vec4 albedo; vec4 ambient; vec4 emission; float roughness; float metallic; uint emissionTextureId; uint pad0; };
-struct SkeletonMesh { Material material; uint transformId; uint pipelineId; uint meshInfoId; uint skeletonId; uint nodeIndex; uint valid; uint pad0; uint pad1; };
+struct SkeletonMesh { Material material; uint transformId; uint pipelineId; uint meshInfoId; uint skeletonId; uint nodeIndex; uint valid; uint localTransformId; uint pad1; };
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
     vec4 frustumPlanes[6];
@@ -33,6 +33,7 @@ layout(set = 0, binding = 3) readonly buffer SkeletonBuffer { mat4 data[]; } ske
 void main() {
     SkeletonMesh mesh = meshes.meshes[gl_InstanceIndex];
     Transform transform = transforms.transforms[mesh.transformId];
+    Transform local = transforms.transforms[mesh.localTransformId];   // MeshTransform (slot 0 = identity)
     uint base = mesh.skeletonId * MATS_PER_SKELETON;
 
     mat4 skinMatrix;
@@ -46,5 +47,5 @@ void main() {
     } else {
         skinMatrix = skeletons.data[base + MAX_BONES_PER_SKELETON + uint(inNodeIndex)];
     }
-    gl_Position = camera.viewProjection * transform.model * skinMatrix * vec4(inPosition, 1.0);
+    gl_Position = camera.viewProjection * transform.model * local.model * skinMatrix * vec4(inPosition, 1.0);
 }

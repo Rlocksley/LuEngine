@@ -225,13 +225,13 @@ namespace Lu{
 
     
         void createMesh(const MeshEntity meshEntity, const MeshPipeEntity meshPipeEntity, 
-                        const TransformId transformId, const GeometryInfoId meshInfoId,
-                        const Material& material) {
+                        const TransformId transformId, const TransformId localTransformId,
+                        const GeometryInfoId meshInfoId, const Material& material) {
             
             auto pipeIt = entityToPipeId.find(meshPipeEntity);
             LU_ASSERT(pipeIt != entityToPipeId.end(), "MeshPackage", "createMesh", "No PipelineId for given MeshPipeline-Entity");
 
-            Mesh mesh(material, transformId, pipeIt->second, meshInfoId);
+            Mesh mesh(material, transformId, localTransformId, pipeIt->second, meshInfoId);
 
             const auto it = entityToMeshId.find(meshEntity);
             if (it == entityToMeshId.end()) {

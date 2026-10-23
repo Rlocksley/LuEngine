@@ -95,6 +95,7 @@ namespace Lu{
                 SkeletonEntity parent;
                 PipeEntity pipe;
                 TransformId transformId;
+                TransformId localTransformId;
                 GeometryInfoId infoId;
                 Material material;
                 uint32_t nodeIndex;
@@ -367,6 +368,7 @@ namespace Lu{
             // ------------------------------------------------------------------------------------
             void createSkeletonMesh(const SkeletonMeshEntity entity, const SkeletonEntity parent,
                                     const PipeEntity pipe, const TransformId transformId,
+                                    const TransformId localTransformId,
                                     const GeometryInfoId infoId, const Material& material,
                                     const uint32_t nodeIndex) {
                 LU_ASSERT(entityToPipeId.contains(pipe), "SkeletonPackage", "createSkeletonMesh",
@@ -377,11 +379,11 @@ namespace Lu{
                     // the parent's CreateSkeleton request has not been processed yet: retry next frame
                     for(PendingMesh& pending : pendingMeshes) {
                         if(pending.entity == entity) {
-                            pending = {entity, parent, pipe, transformId, infoId, material, nodeIndex};
+                            pending = {entity, parent, pipe, transformId, localTransformId, infoId, material, nodeIndex};
                             return;
                         }
                     }
-                    pendingMeshes.push_back({entity, parent, pipe, transformId, infoId, material, nodeIndex});
+                    pendingMeshes.push_back({entity, parent, pipe, transformId, localTransformId, infoId, material, nodeIndex});
                     return;
                 }
 
@@ -395,7 +397,7 @@ namespace Lu{
                     entityToMeshId.set(key(entity), id);
                 }
                 meshOwner[id] = entity;
-                meshes[id] = SkeletonMesh(material, transformId, entityToPipeId.at(pipe), infoId, slot, nodeIndex);
+                meshes[id] = SkeletonMesh(material, transformId, localTransformId, entityToPipeId.at(pipe), infoId, slot, nodeIndex);
                 meshDirty.mark(id);
             }
 
@@ -487,7 +489,7 @@ namespace Lu{
                     std::vector<PendingMesh> retry;
                     retry.swap(pendingMeshes);
                     for(const PendingMesh& p : retry) {
-                        createSkeletonMesh(p.entity, p.parent, p.pipe, p.transformId, p.infoId, p.material, p.nodeIndex);
+                        createSkeletonMesh(p.entity, p.parent, p.pipe, p.transformId, p.localTransformId, p.infoId, p.material, p.nodeIndex);
                     }
                 }
                 meshDirty.collect([&](SkeletonMeshId id) {

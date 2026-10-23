@@ -27,6 +27,10 @@ struct Mesh {
     uint pipelineId;
     uint meshInfoId;
     uint valid;
+    uint localTransformId;   // MeshTransform slot, 0 = identity
+    uint pad1;
+    uint pad2;
+    uint pad3;
 };
 
 layout(set = 0, binding = 0) uniform CameraBuffer {
@@ -55,5 +59,6 @@ layout(set = 0, binding = 2) readonly buffer MeshBuffer {
 void main() {
     Mesh mesh = meshes.meshes[gl_InstanceIndex];
     Transform transform = transforms.transforms[mesh.transformId];
-    gl_Position = camera.viewProjection * transform.model * vec4(inPosition, 1.0);
+    Transform local = transforms.transforms[mesh.localTransformId];   // MeshTransform (slot 0 = identity)
+    gl_Position = camera.viewProjection * transform.model * local.model * vec4(inPosition, 1.0);
 }

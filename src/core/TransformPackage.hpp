@@ -20,6 +20,9 @@ namespace Lu{
         static_assert(offsetof(TransformInstance, id) == 176);
         static_assert(sizeof(TransformInstance) == 192);
 
+        // Slot 0 of the GPU transform buffer: identity. Used as localTransformId when an entity has no MeshTransform.
+        constexpr TransformId IDENTITY_TRANSFORM_ID = 0;
+
         class TransformPackage{
         private:
             DualBuffer<TransformInstance> instanceBuffer;
@@ -29,6 +32,7 @@ namespace Lu{
             ComputePipeline transferPipe;
 
             PagedSparseMap<TransformEntity, TransformId> entityToId;
+            PagedSparseMap<TransformEntity, TransformId> entityToLocalId;   // MeshTransform slots (optional per entity)
             std::vector<Transform> transforms;                       // indexed by TransformId
             DirtyTracker<TransformId> dirty{MAX_FRAMES_IN_FLIGHT};
  
@@ -41,6 +45,14 @@ namespace Lu{
                 transformBuffer(MAX_TRANSFORMS, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
                 {
                     createTransferPipe();
+
+                    // Slot 0 is reserved: it always holds the identity transform. Meshes whose entity has no
+                    // MeshTransform use it as their localTransformId, so the shaders never need a special case.
+                    const TransformId identityId = transformBuffer.allocate();
+                    LU_ASSERT(identityId == IDENTITY_TRANSFORM_ID, "TransformPackage", "TransformPackage", "Identity slot must be slot 0")
+                    transforms.resize(1);
+                    transforms[IDENTITY_TRANSFORM_ID] = Transform{};
+                    dirty.mark(IDENTITY_TRANSFORM_ID);
                 }
 
             void createTransferPipe() {
@@ -61,6 +73,12 @@ namespace Lu{
 
             const SlotBuffer<Transform>& getTransformBuffer() const { return transformBuffer; }
 
+            // GPU slot of the entity's MeshTransform, or IDENTITY_TRANSFORM_ID (0) when it has none.
+            const TransformId getLocalTransformId(const TransformEntity entity) const {
+                const TransformId id = entityToLocalId.get(entity);
+                return id == entityToLocalId.kInvalid ? IDENTITY_TRANSFORM_ID : id;
+            }
+
             const TransformId getTransformId(const TransformEntity entity){
                 const TransformId id = entityToId.get(entity);
                 LU_ASSERT(id != entityToId.kInvalid, "TransformPackage", "getTransformId", "No TransformId for given TransformEntity");
@@ -78,18 +96,47 @@ namespace Lu{
                     dirty.mark(id);
             }
 
+            // ---- MeshTransform (local transform of the meshes) ------------------------------------
+            void createLocalTransform(TransformEntity e, const Transform& t) {
+                TransformId id = entityToLocalId.get(e);
+                if (id == entityToLocalId.kInvalid) {
+                    id = transformBuffer.allocate();
+                    if (id >= transforms.size()) transforms.resize(std::size_t{id} + 1);
+                    entityToLocalId.set(e, id);
+                }
+                transforms[id] = t;
+                dirty.mark(id);
+            }
+
+            void destroyLocalTransform(TransformEntity e) {
+                const TransformId id = entityToLocalId.get(e);
+                if (id == entityToLocalId.kInvalid) return;
+                // Meshes that still point at the slot (until their re-create request arrives) see the identity.
+                transforms[id] = Transform{};
+                dirty.mark(id);
+                transformBuffer.free(id);
+                entityToLocalId.erase(e);
+            }
+
             void updateTransforms() {
                 auto& tripleBuffer = GetTransformTripleBuffer();
-                
-                if(!tripleBuffer.update()){
-                    return;
+                if(tripleBuffer.update()){
+                    for (const auto& u : tripleBuffer.read_slot()) {
+                        const TransformId id = entityToId.get(u.entity);
+                        if (id == entityToId.kInvalid) continue;
+                        transforms[id] = u.transform;
+                        dirty.mark(id);
+                    }
                 }
 
-                for (const auto& u : tripleBuffer.read_slot()) {
-                    const TransformId id = entityToId.get(u.entity);
-                    if (id == entityToId.kInvalid) continue;
-                    transforms[id] = u.transform;
-                    dirty.mark(id);
+                auto& meshTripleBuffer = GetMeshTransformTripleBuffer();
+                if(meshTripleBuffer.update()){
+                    for (const auto& u : meshTripleBuffer.read_slot()) {
+                        const TransformId id = entityToLocalId.get(u.entity);
+                        if (id == entityToLocalId.kInvalid) continue;
+                        transforms[id] = Transform(static_cast<const Component::Transform&>(u.transform));
+                        dirty.mark(id);
+                    }
                 }
             }
 
