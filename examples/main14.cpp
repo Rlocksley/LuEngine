@@ -1,5 +1,5 @@
 // Click-to-command adventurers viewed through a free flying camera.
-// Left click an adventurer to select it, then click the ground to send it there.
+// Click an adventurer to select it; Ctrl-click more to form a group, then click the ground to move them together.
 // WASD control the camera; hold right mouse and move to look around.
 #include "App.hpp"
 #include "Shape.hpp"
@@ -14,6 +14,7 @@
 #include "component/Transform.hpp"
 #include "component/TransformGpu.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -44,12 +45,17 @@ struct MoveOrder {
     glm::vec3 destination{0.0f};
     bool active{false};
 };
+struct SelectionMarkerInfo {
+    flecs::entity person;
+    flecs::entity marker;
+};
 struct CommandState {
     flecs::entity selected;
+    std::vector<flecs::entity> selectedPersons;
+    std::vector<SelectionMarkerInfo> selectionMarkers;
     bool hasDestination{false};
     glm::vec3 destination{0.0f};
     flecs::entity ghost;
-    flecs::entity selectionMarker;
     Lu::Core::ParamId speedParam{};
 };
 
@@ -102,11 +108,13 @@ struct AdventurerCommandDemo {
 
         // Instances share the loaded skeleton prefab and locomotion graph.
         const auto prefab = world.lookup((std::string("Skeleton::") + kModel).c_str());
+        std::vector<flecs::entity> adventurers;
         uint32_t index = 0;
         for (int z = 0; z < 3; ++z) {
             for (int x = 0; x < 4; ++x) {
                 const glm::vec3 position((x - 1.5f) * 2.0f, 0.0f, (z - 1.0f) * 2.0f);
-                world.entity(("Adventurer" + std::to_string(index++)).c_str())
+                auto adventurer = world.entity(("Adventurer" + std::to_string(index++)).c_str());
+                adventurer
                     .is_a(prefab)
                     .add<Adventurer>()
                     .set<Transform>({position, 0.0f, glm::vec3(0, 1, 0), glm::vec3(1.0f)})
@@ -118,6 +126,7 @@ struct AdventurerCommandDemo {
                         .faceMoveDirection = true})
                     .set<MoveOrder>({})
                     .add<Lca::Component::PhysicsFocus>();
+                adventurers.push_back(adventurer);
             }
         }
 
@@ -154,13 +163,17 @@ struct AdventurerCommandDemo {
         auto selectionMaterial = makeMaterial(glm::vec3(0.2f, 0.65f, 1.0f));
         selectionMaterial.albedo.a = 0.48f;
         selectionMaterial.emission = glm::vec4(0.01f, 0.07f, 0.16f, 0.0f);
-        Transform selectionTransform{};
-        selectionTransform.scale = glm::vec3(0.0f);
-        const auto selectionMarker = world.entity("SelectedAdventurerMarker")
-            .set<Transform>(selectionTransform).add<Lu::Component::TransformGpu>();
-        world.entity().set(flecs::Parent{selectionMarker})
-            .set<Lu::Component::Mesh>({.mesh = cubeMesh, .pipeline = ghostPipeline})
-            .set<Lu::Component::Material>(selectionMaterial);
+        std::vector<SelectionMarkerInfo> selectionMarkers;
+        for (const auto person : adventurers) {
+            Transform markerTransform{};
+            markerTransform.scale = glm::vec3(0.0f);
+            const auto marker = world.entity()
+                .set<Transform>(markerTransform).add<Lu::Component::TransformGpu>();
+            world.entity().set(flecs::Parent{marker})
+                .set<Lu::Component::Mesh>({.mesh = cubeMesh, .pipeline = ghostPipeline})
+                .set<Lu::Component::Material>(selectionMaterial);
+            selectionMarkers.push_back({person, marker});
+        }
 
         // Broad, solid floor and scattered environment blocks.
         addCube(world, "AdventurerGround", glm::vec3(0.0f, -0.5f, 0.0f),
@@ -189,9 +202,9 @@ struct AdventurerCommandDemo {
             .intensity = 2.0f, .radius = 160.0f});
 
         world.component<CommandState>().add(flecs::Singleton);
-        world.set<CommandState>({.selected = {}, .hasDestination = false,
-            .destination = glm::vec3(0.0f), .ghost = ghostRoot,
-            .selectionMarker = selectionMarker, .speedParam = speedParam});
+        world.set<CommandState>({.selected = {}, .selectedPersons = {},
+            .selectionMarkers = selectionMarkers, .hasDestination = false,
+            .destination = glm::vec3(0.0f), .ghost = ghostRoot, .speedParam = speedParam});
 
         // Build a world-space mouse ray before the physics module runs its post-step cast.
         world.system<PhysicsRay, const InputState>("BuildAdventurerAim")
@@ -212,10 +225,11 @@ struct AdventurerCommandDemo {
                 ray.maxDistance = cameraState.farClip;
             });
 
-        // Select an adventurer on the first click; subsequent ground clicks set its destination.
+        // Ctrl-click adds adventurers to the group. A click on the ground sends
+        // the whole group while preserving their current spacing.
         world.system<CommandState, const InputState>("SelectAndCommandAdventurers")
             .kind(flecs::OnUpdate)
-            .each([aim, adventurerQuery](flecs::iter& it, size_t, CommandState& state, const InputState& input) {
+            .each([aim, adventurerQuery](CommandState& state, const InputState& input) {
                 if (!input.wasMouseButtonPressedThisFrame(Lu::MouseButton::mouseLeft)) return;
                 const auto& hit = componentRef(aim.get<PhysicsRayHit>());
                 if (!hit.hit) return;
@@ -236,16 +250,36 @@ struct AdventurerCommandDemo {
                     }
                 });
                 if (clicked.is_alive()) {
+                    const bool ctrlDown = input.isKeyDown(static_cast<Lu::KeyCode>(GLFW_KEY_LEFT_CONTROL)) ||
+                        input.isKeyDown(static_cast<Lu::KeyCode>(GLFW_KEY_RIGHT_CONTROL));
+                    if (!ctrlDown) state.selectedPersons.clear();
+                    if (std::find(state.selectedPersons.begin(), state.selectedPersons.end(), clicked) ==
+                        state.selectedPersons.end()) {
+                        state.selectedPersons.push_back(clicked);
+                    }
                     state.selected = clicked;
-                    const auto& order = componentRef(clicked.get<MoveOrder>());
-                    state.hasDestination = order.active;
-                    if (order.active) state.destination = order.destination;
                     return;
                 }
-                if (state.selected.is_alive()) {
-                    state.destination = glm::vec3(hit.point.x, 0.0f, hit.point.z);
-                    state.hasDestination = true;
-                    state.selected.set<MoveOrder>({.destination = state.destination, .active = true});
+                if (state.selectedPersons.empty() && state.selected.is_alive())
+                    state.selectedPersons.push_back(state.selected);
+                if (state.selectedPersons.empty()) return;
+
+                glm::vec3 center(0.0f);
+                size_t aliveCount = 0;
+                for (const auto person : state.selectedPersons) {
+                    if (!person.is_alive()) continue;
+                    center += componentRef(person.get<Transform>()).position;
+                    ++aliveCount;
+                }
+                if (aliveCount == 0) return;
+                center /= static_cast<float>(aliveCount);
+                state.destination = glm::vec3(hit.point.x, 0.0f, hit.point.z);
+                state.hasDestination = true;
+                for (const auto person : state.selectedPersons) {
+                    if (!person.is_alive()) continue;
+                    const glm::vec3 position = componentRef(person.get<Transform>()).position;
+                    const glm::vec3 offset(position.x - center.x, 0.0f, position.z - center.z);
+                    person.set<MoveOrder>({.destination = state.destination + offset, .active = true});
                 }
             });
 
@@ -281,26 +315,36 @@ struct AdventurerCommandDemo {
                 auto ghost = state.ghost;
                 auto& t = ghost.get_mut<Transform>();
                 state.hasDestination = false;
-                if (state.selected.is_alive()) {
-                    const auto& selectedOrder = componentRef(state.selected.get<MoveOrder>());
-                    state.hasDestination = selectedOrder.active;
-                    if (state.hasDestination) state.destination = selectedOrder.destination;
+                glm::vec3 groupDestination(0.0f);
+                size_t activeOrders = 0;
+                for (const auto person : state.selectedPersons) {
+                    if (!person.is_alive()) continue;
+                    const auto& order = componentRef(person.get<MoveOrder>());
+                    if (!order.active) continue;
+                    groupDestination += order.destination;
+                    ++activeOrders;
                 }
+                state.hasDestination = activeOrders > 0;
                 if (!state.hasDestination) {
                     t.scale = glm::vec3(0.0f);
                 } else {
+                    state.destination = groupDestination / static_cast<float>(activeOrders);
                     t.position = state.destination + glm::vec3(0.0f, 0.035f, 0.0f);
                     t.scale = glm::vec3(0.9f, 0.07f, 0.9f);
                 }
 
-                auto marker = state.selectionMarker;
-                auto& markerTransform = marker.get_mut<Transform>();
-                if (!state.selected.is_alive()) {
-                    markerTransform.scale = glm::vec3(0.0f);
-                } else {
-                    const auto& adventurerTransform = componentRef(state.selected.get<Transform>());
-                    markerTransform.position = adventurerTransform.position + glm::vec3(0.0f, 0.035f, 0.0f);
-                    markerTransform.scale = glm::vec3(1.25f, 0.07f, 1.25f);
+                for (const auto& info : state.selectionMarkers) {
+                    auto& markerTransform = info.marker.get_mut<Transform>();
+                    const bool selected = info.person.is_alive() &&
+                        std::find(state.selectedPersons.begin(), state.selectedPersons.end(), info.person) !=
+                            state.selectedPersons.end();
+                    if (!selected) {
+                        markerTransform.scale = glm::vec3(0.0f);
+                    } else {
+                        const auto& personTransform = componentRef(info.person.get<Transform>());
+                        markerTransform.position = personTransform.position + glm::vec3(0.0f, 0.035f, 0.0f);
+                        markerTransform.scale = glm::vec3(1.25f, 0.07f, 1.25f);
+                    }
                 }
             });
     }
@@ -314,7 +358,7 @@ int main() {
             .vertexShader = "shader/mesh_basic.vert.spv", 
             .fragmentShader = "shader/mesh_pbr.frag.spv"})
         .registerMeshPipe(Lu::GraphicsPipelineConfig{
-            .name = "MeshPipe::AdventurerGhost", .capacity = 4,
+            .name = "MeshPipe::AdventurerGhost", .capacity = 32,
             .vertexShader = "shader/mesh_basic.vert.spv", 
             .fragmentShader = "shader/mesh_basic.frag.spv",
             .depthWriteEnable = false, 
