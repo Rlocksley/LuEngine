@@ -209,7 +209,13 @@ namespace Lu{
             cullDescrSet.updateDescriptorSetWrites();
 
             command.begin();
-            capacityBuffer.upload(pipeId, config.capacity, command);
+            // Bit 31 of the capacity entry tells mesh_cull.comp that this pipeline must NOT be part of the
+            // depth prepass: the prepass pipeline draws TRIANGLE_LIST, so index data of line/point
+            // pipelines (e.g. physics debug wireframes) would be interpreted as garbage triangles.
+            constexpr uint32_t kNoDepthPrepassBit = 0x80000000u;
+            const uint32_t capacityEntry = config.capacity |
+                (config.topology == VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST ? 0u : kNoDepthPrepassBit);
+            capacityBuffer.upload(pipeId, capacityEntry, command);
             command.end();
             command.submit();
             command.waitForFence();

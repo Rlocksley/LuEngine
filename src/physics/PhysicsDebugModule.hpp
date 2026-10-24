@@ -332,7 +332,12 @@ struct PhysicsDebug {
             .topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
             .cullMode = VK_CULL_MODE_NONE,
             .depthTestEnable = cfg.depthTest,
-            .depthWriteEnable = false,
+            // Lines are opaque (blendEnable = false), so they MUST write depth. Without it the lines of
+            // different shapes never depth-sort against each other and the winner of every overlapping
+            // pixel is whichever draw the GPU culling compute shader happened to append last
+            // (atomicAdd order, different every frame) -> shimmering. (Depth writes are ignored by Vulkan
+            // when the depth test is disabled, so this is also correct for depthTest = false.)
+            .depthWriteEnable = cfg.depthTest,
             .blendEnable = false});
 
         // ---- destroy: the debug roots die with their Jolt shape (hook also fires when the owner is destructed) ----

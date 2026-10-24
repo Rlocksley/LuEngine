@@ -123,9 +123,13 @@ bool isVisible(vec4 sphere) {
     return true;
 }
 
+// Bit 31 of a capacity entry: pipeline is not rendered by the (triangle list) depth prepass,
+// e.g. line list pipelines. The remaining bits are the indirect command capacity.
+const uint NO_DEPTH_PREPASS_BIT = 0x80000000u;
+
 bool tryReserveCommandSlot(uint shaderIndex, out uint cmdIndex) {
     cmdIndex = atomicAdd(drawCounts.count[shaderIndex], 1);
-    uint maxCommands = indirectCapacities.capacity[shaderIndex];
+    uint maxCommands = indirectCapacities.capacity[shaderIndex] & ~NO_DEPTH_PREPASS_BIT;
     return cmdIndex < maxCommands;  
 }
 
@@ -165,7 +169,7 @@ void main() {
     //Frustum Cull with World Sphere
     if (isVisible(vec4(worldCenter, worldRadius))) {
 
-        // Every visible mesh contributes to the depth prepass, regardless of pipeline.
+        // Every visible triangle mesh contributes to the depth prepass, regardless of pipeline.
         DrawIndexedIndirectCommand cmd;
         cmd.indexCount    = meshInfo.indexCount;
         cmd.instanceCount = 1;             
@@ -173,12 +177,15 @@ void main() {
         cmd.vertexOffset  = meshInfo.vertexOffset;
         cmd.firstInstance = gID;           // Pass global ID to Vertex Shader (gl_InstanceIndex)
 
-        uint depthCmdIndex = atomicAdd(depthDrawCount.count, 1);
-        if (depthCmdIndex < indirectBufferDepth.commands.length()) {
-            indirectBufferDepth.commands[depthCmdIndex] = cmd;
+        uint shaderIndex = mesh.pipelineId;
+
+        if ((indirectCapacities.capacity[shaderIndex] & NO_DEPTH_PREPASS_BIT) == 0u) {
+            uint depthCmdIndex = atomicAdd(depthDrawCount.count, 1);
+            if (depthCmdIndex < indirectBufferDepth.commands.length()) {
+                indirectBufferDepth.commands[depthCmdIndex] = cmd;
+            }
         }
 
-        uint shaderIndex = mesh.pipelineId; 
         uint cmdIndex = 0;
         if (!tryReserveCommandSlot(shaderIndex, cmdIndex)) {
             return;
