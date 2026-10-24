@@ -2,35 +2,16 @@
 
 LuEngine is a C++ game engine built around two user-facing APIs:
 
-- **Game Logic API:** You write your whole Game within flecs ECS.\
-   If you add/set/remove LuEngine Core Components, Observer are triggered, which talk to the Renderer.
-- **Shader API:** register graphics pipelines for meshes and multimeshes, \
-  plus compute pipelines for multimesh-instance transformation. \
-  Shaders follow the buffer layouts and descriptor bindings used by the engine templates.
+**Game Logic API**\
+You write your whole Game within flecs ECS.\
+If you add/set/remove LuEngine Core Components, Observer are triggered, which talk to the Renderer.
+
+**Shader API** \
+register graphics pipelines for meshes, multimeshes and skeletonmeshes \
+plus compute pipelines for multimesh-instance transformation.
+
 
 The renderer is Vulkan-based.
-
-## Loading a Model Prefab
-
-`App::loadModel` imports a model with Assimp and registers each mesh
-geometry and textures with the renderer. It creates a Flecs prefab.
-
-```cpp
-Lu::App("Robot scene")
-    .registerMeshPipe(/* ... */)
-    .loadModel("Robot", "asset/models/robot.gltf")
-    .importModule<RobotScene>()
-    .run();
-
-auto robotPrefab = world.lookup("Mesh::Robot");
-world.entity("RobotInstance")
-    .is_a(robotPrefab)
-    .set<Lu::Component::Transform>({
-        glm::vec3(0.0f), 0.0f,
-        glm::vec3(0.0f, 1.0f, 0.0f),
-        glm::vec3(1.0f)
-    });
-```
 
 ## To a working Development-Environment in 10 Minutes (Window, Linux)
 1.] clone the repo with `git clone https://github.com/Rlocksley/LuEngine` \
@@ -185,7 +166,115 @@ The sample scene is `examples/main4.cpp`; it registers a cube and creates parent
 </details>
 
 <details>
-<summary>3. Writing Your Own Shaders</summary>
+<summary>3. Mesh Prefab Loading</summary>
+
+`App::loadModel` imports a model with Assimp, registers its mesh geometry and textures, and creates a Flecs prefab named `Mesh::<name>` by default. Register the mesh pipeline before loading the model.
+
+```cpp
+Lu::App("Robot scene")
+    .registerMeshPipe(Lu::GraphicsPipelineConfig{
+        .name = "MeshPipe::Simple",
+        .capacity = 128,
+        .vertexShader = "shader/mesh_basic.vert.spv",
+        .fragmentShader = "shader/mesh_pbr.frag.spv"
+    })
+    .loadModel("Robot", "asset/models/robot.gltf")
+    .importModule<RobotScene>()
+    .run();
+
+auto robotPrefab = world.lookup("Mesh::Robot");
+world.entity("RobotInstance")
+    .is_a(robotPrefab)
+    .set<Lu::Component::Transform>({
+        glm::vec3(0.0f), 0.0f,
+        glm::vec3(0.0f, 1.0f, 0.0f),
+        glm::vec3(1.0f)
+    });
+```
+</details>
+
+<details>
+<summary>4. Skeleton Mesh Prefab Loading</summary>
+
+`App::loadSkeletonModel` imports a skinned model, registers its skeleton asset and baked animation clips, and creates a prefab named `Skeleton::<name>` by default. Register a skeleton pipeline before loading it. The prefab contains a skeleton parent and child meshes; instantiate it with `is_a` and give the instance a `Transform`.
+
+```cpp
+Lu::App("Character scene")
+    .threads(4)
+    .registerSkeletonPipe(Lu::GraphicsPipelineConfig{
+        .name = "SkeletonPipe::Simple",
+        .capacity = 4096,
+        .vertexShader = "shader/skeleton_basic.vert.spv",
+        .fragmentShader = "shader/skeleton_pbr.frag.spv"
+    })
+    .loadSkeletonModel("Hero", "asset/models/hero.fbx")
+    .importModule<CharacterScene>()
+    .run();
+
+auto heroPrefab = world.lookup("Skeleton::Hero");
+world.entity("HeroInstance")
+    .is_a(heroPrefab)
+    .set<Lu::Component::Transform>({
+        glm::vec3(0.0f), 0.0f,
+        glm::vec3(0.0f, 1.0f, 0.0f),
+        glm::vec3(1.0f)
+    });
+```
+
+See the **Skeleton Animation** section for animation graphs, state machines, and character control.
+</details>
+
+<details>
+<summary>5. Skeleton Animation</summary>
+
+Skeleton meshes can be animated with baked clips and an `AnimationStateMachine`.\
+See ```examples/main13.cpp```.
+
+```cpp
+Lu::App("Character")
+    .threads(4)                                   // animation graphs are evaluated in parallel
+    .registerSkeletonPipe({
+        .name = "SkeletonPipe::Simple", 
+        .capacity = 4096,
+        .vertexShader = "shader/skeleton_basic.vert.spv", 
+        .fragmentShader = "shader/skeleton_pbr.frag.spv"}
+    )
+    // skeleton asset + baked clips "Hero::<anim>" + prefab "Skeleton::Hero"
+    .loadSkeletonModel("Hero", "asset/models/hero.fbx")   
+    .importModule<MyGame>()
+    .run();
+
+    Lu::AnimationGraphBuilder("HeroGraph", kModel)
+        .clip("Idle", "Idle")
+        .clip("Walk", "Walk")
+        .clip("Run",  "Run")
+        .blend1D("Locomotion", "speed", {{"Idle", 0.0f}, {"Walk", 0.5f}, {"Run", 1.0f}})
+        .clip("Wave", "Wave", /*looping*/ false)
+        .layer("Interaction",/*top*/ "Wave", /*base*/ "Locomotion", "Hero::UpperBody",
+                /*blendIn*/ 0.1f, /*blendOut*/ 0.15f, /*onFinish*/ "Locomotion")
+        .start("Locomotion")
+        .build();
+
+    // ---- the hero: prefab (skeleton + meshes) + capsule + state machine ---------------------------
+    world.entity("Hero")
+        .is_a(world.lookup("Skeleton::Hero"))
+        .add<Hero>()
+        // body: position / yaw come from the CharacterCapsule (Jolt), scale stays 1 so the capsule sizes are meters
+        .set<Transform>({glm::vec3(0.0f, 0.0f, 0.0f), 0.0f, glm::vec3(0, 1, 0), glm::vec3(1.0f)})
+        // visuals: all SkeletonMeshes of the hero are transformed by Transform * MeshTransform.
+        // Change it at runtime with:  hero.get_mut<MeshTransform>().position.y += 0.1f; hero.modified<MeshTransform>();
+        .set<MeshTransform>(MeshTransform(glm::vec3(0.0f, kMeshHeight, 0.0f),
+                                            glm::radians(kMeshFrontYawDegrees), glm::vec3(0, 1, 0),
+                                            glm::vec3(kMeshScale)))
+        .set<AnimationStateMachine>(AnimationStateMachine::create("HeroGraph"))
+        .set<CharacterCapsule>({.radius = 0.35f, .halfHeight = 0.55f})
+        .add<Lca::Component::PhysicsFocus>();
+
+```
+</details>
+
+<details>
+<summary>6. Writing Your Own Shaders</summary>
 
 The engine expects shader interfaces to match the descriptor set layouts created by its packages.\
 In simple terms "let the predefined structs and the layout() bindings in the shader code  before the `void main(){}` function the same.
@@ -208,32 +297,4 @@ register with
 ``` cpp
 App::registerMultiMeshComputePipe();
 ```
-
-## Skeletal Animation
-
-```cpp
-Lu::App("Character")
-    .threads(4)                                   // animation graphs are evaluated in parallel
-    .registerSkeletonPipe({.name = "SkeletonPipe::Simple", .capacity = 4096,
-        .vertexShader = "shader/skeleton_basic.vert.spv", .fragmentShader = "shader/skeleton_pbr.frag.spv"})
-    .loadSkeletonModel("Hero", "asset/models/hero.fbx")   // skeleton asset + baked clips "Hero::<anim>" + prefab "Skeleton::Hero"
-    .importModule<MyGame>()
-    .run();
-```
-
-* **Skeleton / SkeletonMesh**: the parent (Transform + TransformGpu + `Skeleton`) owns one GPU skeleton;
-  every child with `SkeletonMesh` + `Material` is deformed by it (`nodeIndex = UINT32_MAX`) or rigidly
-  attached to one of its nodes (`nodeIndex = AssetManager::skeletonNode("Hero", "hand_r")`).
-* **AnimationStateMachine**: describe a graph once with `AnimationGraphBuilder` (clips, 1D blend spaces,
-  masked layers/one-shot actions), instantiate with `AnimationStateMachine::create("Graph")`, drive it with
-  `setParam` / `setState` / `crossFade`. Cache `StateId`/`ParamId` (the string overloads are for setup code).
-* **CharacterCapsule** (`src/physics/CharacterCapsule.hpp`): ECS view of a Jolt `CharacterVirtual`.
-  Write input (`setMove`, `turn`, `jump`), read state (`moveSpeed`, `onGround`, ...). See `examples/character_demo.cpp`.
-* **Shader API**: `skeleton_basic.vert` reads the SkeletonBuffer (set 0, binding 7):
-  `[skin matrices (node * inverseBind) | node matrices]` per skeleton, `MATS_PER_SKELETON = 2 * MAX_BONES_PER_SKELETON`.
-  `MAX_BONES_PER_SKELETON` must match in `Constant.hpp` and the four `skeleton_*` shaders.
-
-Performance design: clips are baked to fixed-rate frames (O(1) sampling); states/params/masks are integer ids;
-the state tree is evaluated in a per-thread scratch stack (no heap allocation); poses travel as 48 byte local TRS
-through a lock-free triple buffer (ECS workers reserve space atomically and write in place); the GPU builds node
-hierarchy + skin matrices (`skeleton_pose.comp`, one workgroup per skeleton), so the CPU does no matrix math.
+</details>
