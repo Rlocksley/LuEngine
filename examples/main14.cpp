@@ -146,8 +146,6 @@ struct AdventurerCommandDemo {
             .set<PhysicsRay>({})
             .set<PhysicsRayHit>({})
             .add<PhysicsRayCast>();
-        auto adventurerQuery = world.query_builder<Adventurer, const Transform>().build();
-
         const auto cubeMesh = world.lookup("Mesh::AdventurerEnvironment");
         const auto solidPipeline = world.lookup("MeshPipe::AdventurerEnvironment");
         const auto ghostPipeline = world.lookup("MeshPipe::AdventurerGhost");
@@ -196,11 +194,17 @@ struct AdventurerCommandDemo {
         Transform sunTransform{};
         sunTransform.position = glm::vec3(0.0f, 35.0f, 0.0f);
         sunTransform.rotation = glm::angleAxis((0.8f - 3.14f) / 2.0f, glm::vec3(1, 0, 0));
-        const auto sun = world.entity("AdventurerCommandSun").set<Transform>(sunTransform)
-            .add<Lu::Component::TransformGpu>();
-        world.entity().set(flecs::Parent{sun}).set<Lu::Component::Light>({
-            .type = Lu::LightType::Directional, .color = glm::vec3(1.0f, 0.95f, 0.84f),
-            .intensity = 2.0f, .radius = 160.0f});
+        world.entity()
+            .set(flecs::Parent{ 
+                world.entity("AdventurerCommandSun")
+                .set<Transform>(sunTransform)
+                .add<Lu::Component::TransformGpu>()
+            })
+            .set<Lu::Component::Light>({
+                .type = Lu::LightType::Point, 
+                .color = glm::vec3(1.0f, 0.95f, 0.84f),
+                .intensity = 200.0f, .radius = 160.0f
+            });
 
         world.component<CommandState>().add(flecs::Singleton);
         world.set<CommandState>({.selected = {}, .selectedPersons = {},
@@ -230,26 +234,14 @@ struct AdventurerCommandDemo {
         // the whole group while preserving their current spacing.
         world.system<CommandState, const InputState>("SelectAndCommandAdventurers")
             .kind(flecs::OnUpdate)
-            .each([aim, adventurerQuery](CommandState& state, const InputState& input) {
+            .each([aim](CommandState& state, const InputState& input) {
                 if (!input.wasMouseButtonPressedThisFrame(Lu::MouseButton::mouseLeft)) return;
                 const auto& hit = componentRef(aim.get<PhysicsRayHit>());
                 if (!hit.hit) return;
-                // CharacterVirtual capsules are not ordinary rigid bodies, so test
-                // the ray against their visual/capsule bounds as well as physics hits.
-                flecs::entity clicked{};
-                float nearest = hit.distance;
-                const auto& ray = componentRef(aim.get<PhysicsRay>());
-                adventurerQuery.each([&](flecs::entity candidate,
-                    Adventurer, const Transform& transform) {
-                    const glm::vec3 toCenter = transform.position + glm::vec3(0.0f, 0.9f, 0.0f) - ray.origin;
-                    const float along = glm::dot(toCenter, ray.direction);
-                    if (along < 0.0f || along > nearest) return;
-                    const glm::vec3 closest = ray.origin + ray.direction * along;
-                    if (glm::length(closest - (transform.position + glm::vec3(0.0f, 0.9f, 0.0f))) < 0.65f) {
-                        nearest = along;
-                        clicked = candidate;
-                    }
-                });
+                // PhysicsRayHit already identifies the nearest Jolt target, including
+                // CharacterVirtual capsule shapes.
+                flecs::entity clicked = aim.world().entity(hit.entity);
+                if (!clicked.is_alive() || !clicked.has<Adventurer>()) clicked = {};
                 if (clicked.is_alive()) {
                     const bool ctrlDown = input.isKeyDown(static_cast<Lu::KeyCode>(GLFW_KEY_LEFT_CONTROL)) ||
                         input.isKeyDown(static_cast<Lu::KeyCode>(GLFW_KEY_RIGHT_CONTROL));

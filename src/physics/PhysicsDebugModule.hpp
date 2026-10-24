@@ -21,7 +21,7 @@
 #include <vector>
 
 // ============================================================================
-//  PhysicsDebug: renders the JoltPhysics shapes as transparent meshes
+//  PhysicsDebug: renders the JoltPhysics shapes as wireframe meshes
 //
 //      Lu::App("Game")
 //          ...
@@ -32,7 +32,7 @@
 //
 //      physics entity   Transform (+ RigidBodyDesc / CharacterCapsule)      <- Jolt writes this
 //        '- debug root  Transform + TransformGpu + PhysicsDebugPart         <- copy of the physics Transform
-//             '- debug  Mesh + Material (transparent pipeline)              <- Transform parent = debug root
+//             '- debug  Mesh + Material (wireframe line pipeline)            <- Transform parent = debug root
 //
 //  The debug root follows the physics entity every frame (PostPhysics phase) and is destroyed
 //  together with it / when its Jolt shape disappears. Why a root with an own Transform instead of
@@ -63,11 +63,11 @@ struct PhysicsDebugConfig {
     uint32_t sphereSegments{20};      // longitudes of spheres / capsules
     uint32_t sphereRings{10};         // latitudes of a (half) sphere
 
-    glm::vec4 staticColor{0.25f, 0.55f, 1.00f, 0.28f};
-    glm::vec4 kinematicColor{1.00f, 0.85f, 0.20f, 0.30f};
-    glm::vec4 dynamicColor{0.25f, 1.00f, 0.35f, 0.30f};
-    glm::vec4 sensorColor{0.95f, 0.30f, 1.00f, 0.25f};
-    glm::vec4 characterColor{1.00f, 0.50f, 0.15f, 0.32f};
+    glm::vec4 staticColor{0.25f, 0.55f, 1.00f, 1.0f};
+    glm::vec4 kinematicColor{1.00f, 0.85f, 0.20f, 1.0f};
+    glm::vec4 dynamicColor{0.25f, 1.00f, 0.35f, 1.0f};
+    glm::vec4 sensorColor{0.95f, 0.30f, 1.00f, 1.0f};
+    glm::vec4 characterColor{1.00f, 0.50f, 0.15f, 1.0f};
 };
 
 inline PhysicsDebugConfig& GetPhysicsDebugConfig() {
@@ -115,21 +115,13 @@ struct MeshData {
 inline MeshData makeBox() {
     MeshData m;
     const glm::vec4 white(1.0f);
-    struct Face { glm::vec3 n, u, v; };
-    const Face faces[6] = {
-        {{ 0, 0,-1}, { 1, 0, 0}, { 0, 1, 0}}, {{ 0, 0, 1}, {-1, 0, 0}, { 0, 1, 0}},
-        {{-1, 0, 0}, { 0, 0,-1}, { 0, 1, 0}}, {{ 1, 0, 0}, { 0, 0, 1}, { 0, 1, 0}},
-        {{ 0, 1, 0}, { 1, 0, 0}, { 0, 0, 1}}, {{ 0,-1, 0}, { 1, 0, 0}, { 0, 0,-1}},
-    };
-    for (const Face& f : faces) {
-        const uint32_t base = static_cast<uint32_t>(m.vertices.size());
-        const glm::vec3 c = f.n * 0.5f;
-        m.vertices.push_back({c - f.u * 0.5f - f.v * 0.5f, f.n, white, {0.0f, 0.0f}});
-        m.vertices.push_back({c + f.u * 0.5f - f.v * 0.5f, f.n, white, {1.0f, 0.0f}});
-        m.vertices.push_back({c + f.u * 0.5f + f.v * 0.5f, f.n, white, {1.0f, 1.0f}});
-        m.vertices.push_back({c - f.u * 0.5f + f.v * 0.5f, f.n, white, {0.0f, 1.0f}});
-        for (uint32_t i : {0u, 1u, 2u, 2u, 3u, 0u}) m.indices.push_back(base + i);
+    for (int y : {-1, 1}) for (int z : {-1, 1}) for (int x : {-1, 1}) {
+        const glm::vec3 p(0.5f * x, 0.5f * y, 0.5f * z);
+        m.vertices.push_back({p, glm::normalize(p), white, {0.0f, 0.0f}});
     }
+    for (uint32_t i = 0; i < 8; ++i)
+        for (uint32_t bit : {1u, 2u, 4u})
+            if ((i & bit) == 0) { m.indices.push_back(i); m.indices.push_back(i | bit); }
     return m;
 }
 
@@ -162,6 +154,35 @@ inline MeshData makeLathe(const std::vector<ProfilePoint>& profile, uint32_t seg
     return m;
 }
 
+// Line-list version of a surface of revolution: draw each profile ring and each
+// longitudinal meridian once, without the triangle diagonals from a solid mesh.
+inline MeshData makeWireLathe(const std::vector<ProfilePoint>& profile, uint32_t segments) {
+    constexpr float kTwoPi = 6.28318530718f;
+    MeshData m;
+    const glm::vec4 white(1.0f);
+    segments = std::max(segments, 3u);
+    for (size_t r = 0; r < profile.size(); ++r) {
+        for (uint32_t s = 0; s < segments; ++s) {
+            const float a = kTwoPi * static_cast<float>(s) / segments;
+            const float c = std::cos(a), sn = std::sin(a);
+            m.vertices.push_back({{profile[r].radius * c, profile[r].y, profile[r].radius * sn},
+                glm::normalize(glm::vec3(profile[r].nr * c, profile[r].ny, profile[r].nr * sn)), white,
+                {static_cast<float>(s) / segments, static_cast<float>(r) / std::max<size_t>(profile.size() - 1, 1)}});
+        }
+    }
+    const uint32_t ringCount = static_cast<uint32_t>(profile.size());
+    for (uint32_t r = 0; r < ringCount; ++r) {
+        for (uint32_t s = 0; s < segments; ++s) {
+            const uint32_t current = r * segments + s;
+            m.indices.push_back(current); m.indices.push_back(r * segments + (s + 1) % segments);
+            if (r + 1 < ringCount) {
+                m.indices.push_back(current); m.indices.push_back((r + 1) * segments + s);
+            }
+        }
+    }
+    return m;
+}
+
 // Half sphere of radius 1: up = true -> y >= 0, otherwise y <= 0. full = whole sphere.
 inline MeshData makeSphere(uint32_t rings, uint32_t segments, bool up, bool full) {
     constexpr float kHalfPi = 1.57079632679f;
@@ -177,11 +198,11 @@ inline MeshData makeSphere(uint32_t rings, uint32_t segments, bool up, bool full
         const float y = std::sin(angle), r = std::cos(angle);
         profile.push_back({y, r, y, r});
     }
-    return makeLathe(profile, segments);
+    return makeWireLathe(profile, segments);
 }
 
 inline MeshData makeCylinder(uint32_t segments) {
-    return makeLathe({{-1.0f, 1.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 0.0f, 1.0f}}, segments);
+    return makeWireLathe({{-1.0f, 1.0f, 0.0f, 1.0f}, {1.0f, 1.0f, 0.0f, 1.0f}}, segments);
 }
 
 inline flecs::entity registerMesh(const std::string& name, const MeshData& m) {
@@ -224,7 +245,7 @@ inline void spawnParts(flecs::entity owner, const Assets& assets, const PartSpec
             .add<TransformGpu>()
             .set<PhysicsDebugPart>({owner, specs[i].offset, specs[i].scale});
 
-        // debug mesh: transparent pipeline
+        // debug mesh: wireframe line pipeline
         world.entity()
             .set(flecs::Parent{root})
             .set<Lu::Component::Mesh>({.mesh = specs[i].mesh, .pipeline = assets.pipeline})
@@ -244,12 +265,12 @@ inline void spawnRigidBody(flecs::entity e, const Assets& assets, const Lca::Com
 
     switch (d.shape) {
     case Lca::Component::ShapeKind::Box: {
-        const PartSpec box{assets.box, glm::vec3(0.0f), d.halfExtents * 2.0f};
+        const PartSpec box{assets.box, glm::vec3(0.0f), d.halfExtents * 1.9f};
         spawnParts(e, assets, &box, 1, color);
         break;
     }
     case Lca::Component::ShapeKind::Sphere: {
-        const PartSpec sphere{assets.sphere, glm::vec3(0.0f), glm::vec3(d.halfExtents.x)};
+        const PartSpec sphere{assets.sphere, glm::vec3(0.0f), glm::vec3(d.halfExtents.x * 0.9f)};
         spawnParts(e, assets, &sphere, 1, color);
         break;
     }
@@ -268,7 +289,7 @@ inline void spawnRigidBody(flecs::entity e, const Assets& assets, const Lca::Com
 }
 
 inline void spawnCharacter(flecs::entity e, const Assets& assets, const Lca::Component::CharacterCapsule& c) {
-    // CharacterCapsule: the Jolt capsule is lifted by halfHeight + radius, so Transform = feet
+    // Transform is at the feet; Jolt lifts the capsule by halfHeight + radius.
     const float lift = c.halfHeight + c.radius;
     const PartSpec parts[3] = {
         {assets.cylinder,       glm::vec3(0.0f, lift, 0.0f),                glm::vec3(c.radius, c.halfHeight, c.radius)},
@@ -296,7 +317,7 @@ struct PhysicsDebug {
         world.component<PhysicsDebugPart>();
         world.component<PhysicsDebugHandle>();
 
-        // ---- shared assets: unit meshes + transparent mesh pipeline -------------------------------
+        // ---- shared assets: unit wire meshes + line-list pipeline ---------------------------------
         // (created now, the renderer does not accept new pipelines / geometry after App::run())
         const auto& cfg = GetPhysicsDebugConfig();
         auto assets = std::make_shared<Assets>();
@@ -308,10 +329,11 @@ struct PhysicsDebug {
         assets->pipeline = Core::GetAssetManager().registerMeshPipe(Lu::GraphicsPipelineConfig{
             .name = "MeshPipe::PhysicsDebug", .capacity = cfg.capacity,
             .vertexShader = cfg.vertexShader, .fragmentShader = cfg.fragmentShader,
+            .topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
             .cullMode = VK_CULL_MODE_NONE,
             .depthTestEnable = cfg.depthTest,
             .depthWriteEnable = false,
-            .blendEnable = true});
+            .blendEnable = false});
 
         // ---- destroy: the debug roots die with their Jolt shape (hook also fires when the owner is destructed) ----
         world.component<PhysicsDebugHandle>().on_remove([](flecs::entity owner, PhysicsDebugHandle& h) {

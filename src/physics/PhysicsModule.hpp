@@ -4,6 +4,7 @@
 #include "flecs.h"
 #include "PhysicsComponents.hpp"
 #include "Physics.hpp"
+#include "CharacterCapsule.hpp"
 #include "../core/component/Transform.hpp"
 
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
@@ -313,6 +314,8 @@ struct PhysicsModule {
         world.use(postPhysics, "PostPhysics");
         world.entity(flecs::OnUpdate).depends_on(postPhysics);
 
+        auto characterCapsules = world.query<CharacterCapsule>();
+
         // ---- resource cleanup via hooks (also fires on entity destruct) ------
         world.component<PhysicsBody>().on_remove([](flecs::entity, PhysicsBody& b) {
             Core::GetPhysics().destroyBody(b.id);
@@ -435,7 +438,7 @@ struct PhysicsModule {
         // ---- ECS ray requests -> Jolt narrow phase -> ECS hit results --------
         world.system<const PhysicsRay, PhysicsRayHit>("PhysicsRayCasts")
             .with<PhysicsRayCast>().kind(postPhysics)
-            .each([](flecs::entity e, const PhysicsRay& request, PhysicsRayHit& hit) {
+            .each([characterCapsules](flecs::entity e, const PhysicsRay& request, PhysicsRayHit& hit) {
                 hit = PhysicsRayHit{};
                 const float directionLength = glm::length(request.direction);
                 if (directionLength < 1e-6f || request.maxDistance <= 0.0f) return;
@@ -446,20 +449,42 @@ struct PhysicsModule {
                     Core::toJoltVec3(direction * request.maxDistance));
                 ::JPH::RayCastResult result;
                 auto& physics = Core::GetPhysics();
-                if (!physics.getPhysicsSystem().GetNarrowPhaseQuery().CastRay(ray, result)) return;
+                if (physics.getPhysicsSystem().GetNarrowPhaseQuery().CastRay(ray, result)) {
+                    hit.hit = true;
+                    hit.bodyId = result.mBodyID;
+                    hit.entity = physics.getBodyMap().get(result.mBodyID);
+                    hit.distance = result.mFraction * request.maxDistance;
+                    const ::JPH::RVec3 hitPoint = ray.GetPointOnRay(result.mFraction);
+                    hit.point = Core::toGlmVec3(hitPoint);
 
-                hit.hit = true;
-                hit.bodyId = result.mBodyID;
-                hit.entity = physics.getBodyMap().get(result.mBodyID);
-                hit.distance = result.mFraction * request.maxDistance;
-                const ::JPH::RVec3 hitPoint = ray.GetPointOnRay(result.mFraction);
-                hit.point = Core::toGlmVec3(hitPoint);
-
-                ::JPH::BodyLockRead lock(physics.getPhysicsSystem().GetBodyLockInterface(), result.mBodyID);
-                if (lock.Succeeded()) {
-                    hit.normal = Core::toGlmVec3(lock.GetBody().GetWorldSpaceSurfaceNormal(
-                        result.mSubShapeID2, hitPoint));
+                    ::JPH::BodyLockRead lock(physics.getPhysicsSystem().GetBodyLockInterface(), result.mBodyID);
+                    if (lock.Succeeded()) {
+                        hit.normal = Core::toGlmVec3(lock.GetBody().GetWorldSpaceSurfaceNormal(
+                            result.mSubShapeID2, hitPoint));
+                    }
                 }
+
+                // CharacterVirtual is intentionally absent from Jolt's rigid-body
+                // broad phase. Cast against each character's Jolt transformed shape
+                // and keep whichever Jolt raycast result is closest.
+                characterCapsules.each([&](flecs::entity characterEntity, const CharacterCapsule& capsule) {
+                    if (!capsule.character) return;
+                    ::JPH::RayCastResult characterResult;
+                    characterResult.mFraction = hit.hit
+                        ? hit.distance / request.maxDistance
+                        : 1.0f + FLT_EPSILON;
+                    const auto transformedShape = capsule.character->GetTransformedShape();
+                    if (!transformedShape.CastRay(ray, characterResult)) return;
+
+                    hit.hit = true;
+                    hit.entity = characterEntity.id();
+                    hit.bodyId = ::JPH::BodyID();
+                    hit.distance = characterResult.mFraction * request.maxDistance;
+                    const ::JPH::RVec3 hitPoint = ray.GetPointOnRay(characterResult.mFraction);
+                    hit.point = Core::toGlmVec3(hitPoint);
+                    hit.normal = Core::toGlmVec3(transformedShape.GetWorldSpaceSurfaceNormal(
+                        characterResult.mSubShapeID2, hitPoint));
+                });
             });
             
         // character hits are valid for one frame only
