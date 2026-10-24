@@ -511,6 +511,33 @@ namespace Lu{
                 this->world = world;
             }
 
+            // Registration helpers for modules (flecs modules only receive the world, not the App).
+            // Like App::registerMeshPipe / App::registerMesh they are NOT thread safe: call them while
+            // the modules are imported, i.e. before App::run() starts the ECS and render threads.
+            flecs::entity registerMeshPipe(const GraphicsPipelineConfig& config) {
+                LU_ASSERT(renderer && world,
+                    "AssetManager", "registerMeshPipe",
+                    "AssetManager has not been initialized by an App.")
+                LU_ASSERT(!config.name.empty() && config.capacity > 0,
+                    "AssetManager", "registerMeshPipe",
+                    "GraphicsPipelineConfig needs a name and a capacity bigger 0.")
+                const flecs::entity pipe = world->entity(config.name.c_str());
+                renderer->createMeshPipe(pipe.id(), config);
+                return pipe;
+            }
+
+            flecs::entity registerMeshGeometry(const std::string& name,
+                const std::vector<Vertex::Mesh>& vertices, const std::vector<uint32_t>& indices) {
+                LU_ASSERT(renderer && world,
+                    "AssetManager", "registerMeshGeometry",
+                    "AssetManager has not been initialized by an App.")
+                LU_ASSERT(!name.empty(),
+                    "AssetManager", "registerMeshGeometry", "name must not be empty.")
+                const flecs::entity geometry = world->entity(name.c_str());
+                renderer->createMeshGeometry(geometry.id(), vertices, indices);
+                return geometry;
+            }
+
             void loadModel(const std::string& name, const std::string& filePath,
                 const std::string& prefix = "Mesh::",
                 const std::string& pipelineName = "MeshPipe::Simple") {

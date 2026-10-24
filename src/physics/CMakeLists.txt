@@ -7,6 +7,7 @@ Physics.hpp
 Physics.cpp
 PhysicsComponents.hpp
 PhysicsModule.hpp
+PhysicsDebugModule.hpp
 CharacterCapsule.hpp
 )
 

@@ -5,6 +5,7 @@
 #include "Shape.hpp"
 #include "FlyingCamera.hpp"
 #include "PhysicsModule.hpp"
+#include "PhysicsDebugModule.hpp"
 #include "CharacterCapsule.hpp"
 #include "component/AnimationStateMachine.hpp"
 #include "component/Light.hpp"
@@ -379,5 +380,6 @@ int main() {
             "SkeletonPipe::Adventurer14", 
             30.0f)
         .importModule<AdventurerCommandDemo>()
+        .importModule<Lu::Module::PhysicsDebug>()   // transparent debug render of all Jolt shapes
         .run();
 }
