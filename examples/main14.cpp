@@ -110,8 +110,8 @@ struct AdventurerCommandDemo {
         const auto prefab = world.lookup((std::string("Skeleton::") + kModel).c_str());
         std::vector<flecs::entity> adventurers;
         uint32_t index = 0;
-        for (int z = -4; z < 4; ++z) {
-            for (int x = -4; x < 4; ++x) {
+        for (int z = -12; z < 12; ++z) {
+            for (int x = -12; x < 12; ++x) {
                 const glm::vec3 position((x - 1.5f) * 2.0f, 0.0f, (z - 1.0f) * 2.0f);
                 auto adventurer = world.entity(("Adventurer" + std::to_string(index++)).c_str());
                 adventurer
@@ -358,7 +358,7 @@ int main() {
             .vertexShader = "shader/mesh_basic.vert.spv", 
             .fragmentShader = "shader/mesh_pbr.frag.spv"})
         .registerMeshPipe(Lu::GraphicsPipelineConfig{
-            .name = "MeshPipe::AdventurerGhost", .capacity = 32,
+            .name = "MeshPipe::AdventurerGhost", .capacity = 1024,
             .vertexShader = "shader/mesh_basic.vert.spv", 
             .fragmentShader = "shader/mesh_basic.frag.spv",
             .depthWriteEnable = false, 
