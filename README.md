@@ -7,7 +7,7 @@ You write your whole Game within flecs ECS.\
 If you add/set/remove LuEngine Core Components, Observer are triggered, which talk to the Renderer.
 
 **Shader API** \
-register graphics pipelines for meshes, multimeshes and skeletonmeshes \
+register graphics pipelines for meshes, multimeshes, skeletonmeshes and 2D text \
 plus compute pipelines for multimesh-instance transformation.
 
 
@@ -17,14 +17,14 @@ The renderer is Vulkan-based.
 1.] clone the repo with `git clone https://github.com/Rlocksley/LuEngine` \
 2.] install CMake and the Vulkan SDK (Vulkan 1.4)\
 3.] install Visual Studio Code and install the Cpp and CMake Extensions\
-4.] clone vcpkg inside the parent directory of the LuEngine repo directory and `run vcpkg install [glfw3,glm,flecs]` \
+4.] clone vcpkg inside the parent directory of the LuEngine repo directory and `run vcpkg install [glfw3,glm,flecs,freetype]` \
 5.] open the LuEngine repo in Visual Studio Code and right click `LuEngine/CMakeLists.txt` -> build\
 6.] compile the shaders `LuEngine/shader/compile.bat`\
 (you need to get glslc from the Vulkan SDK and paste it into the shader directory)\
 7.] for your own project, create a directory in `examples` and\
 copy/adjust the `examples/CMakeLists.txt` and `.vscode/launch.json` , `.vscode/tasks.json`
 
-- vcpkg dependencies configured by `.vscode/settings.json`: Vulkan headers/loader, GLFW, GLM, and Flecs
+- vcpkg dependencies configured by `.vscode/settings.json`: Vulkan headers/loader, GLFW, GLM, Flecs, and FreeType (add `freetype` there too)
 
 <details>
 <summary>1. Hello World</summary>
@@ -297,4 +297,67 @@ register with
 ``` cpp
 App::registerMultiMeshComputePipe();
 ```
+</details>
+
+<details>
+<summary>7. 2D Text</summary>
+
+Text is drawn by the 2D part of the renderer: `Transform2D` + `Camera2D` + `Text`, with fonts rasterized by FreeType.
+Source: `examples/main15.cpp` (`lu_example15 [font.ttf]`).
+
+```cpp
+Lu::App("Text", false, 1280, 800)
+    // FreeType -> atlas (signed distance field by default) -> a texture of the global texture array
+    .registerFont("Font::Main", "path/to/font.ttf", 64)
+    // shaders of the glyph quads, register your own like a mesh pipe. capacity = max glyphs per frame
+    .registerFontPipe(Lu::GraphicsPipelineConfig{
+        .name = "FontPipe::Basic",
+        .capacity = 4096,
+        .vertexShader = "shader/font_basic.vert.spv",
+        .fragmentShader = "shader/font_basic.frag.spv",
+        .cullMode = VK_CULL_MODE_NONE,
+        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
+    })
+    .importModule<MyModule>()
+    .run();
+
+// in MyModule: the Transform2D is on the PARENT, the Text on a CHILD (like Transform / Mesh)
+auto label = world.entity("Label").set<Lu::Component::Transform2D>({
+    .position = {20.f, 20.f},      // pixels, origin top-left, y down
+    .positionZ = 5,                // layer, higher = in front
+    // .rotation, .scale
+});
+world.entity("LabelText").child_of(label).set(Lu::Component::Text{
+    .text = "Hello \xC3\xA4 World",   // UTF-8, '\n' = new line
+    .font = world.lookup("Font::Main"),
+    .pipeline = world.lookup("FontPipe::Basic"),
+    .color = glm::vec4(1.f),
+    .size = 32.f,                  // line height in pixels
+    .align = Lu::TextAlign::Left
+});
+// change the string later with .set<Lu::Component::Text>(...) or modified<>(): it is the same EcsRequest::CreateText
+```
+
+How it works on the renderer side:
+
+| ECS | Request | Renderer |
+|---|---|---|
+| `Component::Transform2D` | `CreateTransform2D` / `UpdateTransform2D` (triple buffer, per frame) / `DestroyTransform2D` | `Transform2DPackage`: `Transform2DInstanceBuffer` (elements `(Transform2D, id)`) -> transfer shader -> `Transform2DBuffer` |
+| `Component::Camera2D` | `UpdateCamera2D{Camera2DData}` | `Camera2DPackage`: uniform buffer read by the 2D shaders |
+| `Component::Text` | `CreateText` (create **and** update) / `DestroyText` | `TextPackage` |
+| `App::registerFont` | - | `FontPackage`: FreeType atlas -> global texture array, `entityToFontId`, `FontBuffer`, font pipelines |
+
+A text with n characters owns a range of n `Core::Font` structs in the `FontBuffer` (a range allocator like the vertex/index buffer of the
+`GeometryPackage`; if the new string has another length the old range is freed and a new one allocated). Each struct stores
+the `TextureId` of the atlas, the glyph rectangle, color, the parent's Transform2D slot, ... For every visible glyph `font_cull.comp` writes one
+`VkDrawIndirectCommand` (6 vertices, the glyph slot is passed in `firstVertex`), drawn with `vkCmdDrawIndirectCount` per font pipeline.
+Before the glyphs are drawn the depth image is cleared, so text never interferes with the 3D scene; glyphs of different `positionZ` layers
+are ordered by the depth test (fully transparent texels are discarded).
+
+`Camera2D` is optional (default: world pixel == screen pixel). `position` is the world point shown at `pivot` (fraction of the window,
+`(0.5, 0.5)` = center), `zoom` and `rotation` act around the pivot. `Component::Static` on an entity with a `Transform2D` skips the per-frame update.
+
+Limits and constants (`src/core/Constant.hpp`): `MAX_FONT_GLYPHS`, `MAX_GLYPHS_PER_TEXT`, `MAX_TRANSFORMS_2D`, `MAX_FONT_PIPELINES`.
+`FontConfig::sdf = false` gives a plain coverage atlas (best at exactly `size == pixelSize`), `FontConfig::codepointRanges` selects the unicode ranges
+of the atlas (default: ASCII + Latin-1); missing characters are drawn as `?`.
 </details>

@@ -1,0 +1,116 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+
+// One thread per Font struct (= glyph). Visible glyphs append ONE draw command to the indirect buffer of their
+// font pipeline. The quad is generated in font_basic.vert from gl_VertexIndex: glyph = gl_VertexIndex / 6,
+// so the glyph slot is passed through firstVertex (no drawIndirectFirstInstance feature needed).
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+struct Transform2D{
+    mat4 model;
+    vec2 position;
+    vec2 scale;
+    vec4 rotation;
+    uint positionZ;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+struct Font{
+    vec4 uvRect;
+    vec4 color;
+    vec2 offset;
+    vec2 size;
+    uint textureId;
+    uint transform2DId;
+    uint pipelineId;
+    uint valid;
+    uint glyphIndex;
+    uint glyphCount;
+    float sdf;
+    uint pad0;
+};
+
+// Fits VkDrawIndirectCommand
+struct DrawIndirectCommand {
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
+};
+
+layout(set = 0, binding = 0) uniform Camera2DBuffer {
+    mat4 viewProjection;
+    mat4 view;
+    vec2 position;
+    vec2 screenSize;
+    float zoom;
+    float rotation;
+    float deltaTime;
+    float time;
+} camera;
+
+layout(set = 0, binding = 1) readonly buffer Transform2DBuffer {
+    Transform2D transforms[];
+} transforms;
+
+layout(set = 0, binding = 2) readonly buffer FontBuffer {
+    Font fonts[];
+} fontBuffer;
+
+layout(set = 0, binding = 3) buffer DrawCountBuffer {
+    uint count[];
+} drawCounts;
+
+layout(set = 0, binding = 4) readonly buffer CapacityBuffer {
+    uint capacity[];
+} indirectCapacities;
+
+layout(set = 0, binding = 5) writeonly buffer IndirectDrawCommandBuffer {
+    DrawIndirectCommand commands[];
+} indirectBuffers[];
+
+layout(push_constant) uniform PushConstants {
+    uint glyphCount;     // exclusive upper bound of the used FontBuffer slots
+} pc;
+
+void main() {
+    uint gID = gl_GlobalInvocationID.x;
+    if (gID >= pc.glyphCount) {
+        return;
+    }
+
+    Font font = fontBuffer.fonts[gID];
+    if (font.valid == 0u) {
+        return;     // free slot or whitespace
+    }
+
+    // Screen space cull: bounding box of the transformed quad against the clip rectangle [-1, 1]^2
+    Transform2D transform = transforms.transforms[font.transform2DId];
+    mat4 modelViewProjection = camera.viewProjection * transform.model;
+    vec2 lo = vec2(1e30);
+    vec2 hi = vec2(-1e30);
+    for (uint corner = 0u; corner < 4u; ++corner) {
+        vec2 local = font.offset + vec2(float(corner & 1u), float(corner >> 1u)) * font.size;
+        vec2 clip = (modelViewProjection * vec4(local, 0.0, 1.0)).xy;
+        lo = min(lo, clip);
+        hi = max(hi, clip);
+    }
+    if (hi.x < -1.0 || lo.x > 1.0 || hi.y < -1.0 || lo.y > 1.0) {
+        return;
+    }
+
+    uint pipelineId = font.pipelineId;
+    uint cmdIndex = atomicAdd(drawCounts.count[pipelineId], 1u);
+    if (cmdIndex >= indirectCapacities.capacity[pipelineId]) {
+        return;
+    }
+
+    DrawIndirectCommand cmd;
+    cmd.vertexCount = 6u;
+    cmd.instanceCount = 1u;
+    cmd.firstVertex = gID * 6u;
+    cmd.firstInstance = 0u;
+    indirectBuffers[nonuniformEXT(pipelineId)].commands[cmdIndex] = cmd;
+}

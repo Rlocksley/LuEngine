@@ -12,6 +12,10 @@
 #include "SkeletonPackage.hpp"
 #include "AnimationLibrary.hpp"
 #include "TexturePackage.hpp"
+#include "Camera2DPackage.hpp"
+#include "Transform2DPackage.hpp"
+#include "FontPackage.hpp"
+#include "TextPackage.hpp"
 #include "Channel.hpp"
 #include "FramerateMonitor.hpp"
 
@@ -45,6 +49,13 @@ namespace Lu{
             using MultiMeshComputePipeEntity = flecs::entity_t;
             void createMultiMeshComputePipe(const MultiMeshComputePipeEntity entity, const ComputePipelineConfig& config);
 
+            using FontPipeEntity = flecs::entity_t;
+            void createFontPipe(const FontPipeEntity entity, const GraphicsPipelineConfig& config);
+
+            // Rasterizes the font into an atlas that is registered as texture `atlasEntity`.
+            using FontEntity = flecs::entity_t;
+            void createFont(const FontEntity entity, const flecs::entity_t atlasEntity, const FontConfig& config);
+
             using TextureEntity = flecs::entity_t;
             void createTexture(const TextureEntity entity, const std::string& filePath);
             void createTexture(const TextureEntity entity, TextureCpu&& texture);
@@ -71,11 +82,19 @@ namespace Lu{
             GeometryPackage<Vertex::Skeleton> skeletonGeometry;
             SkeletonPackage skeleton;
             std::deque<EcsRequest::CreateMultiMesh> pendingMultiMeshCreates;
+
+            // 2D: Camera2D, Transform2D, fonts (atlas, FontBuffer, font pipelines) and Text
+            Camera2DPackage camera2D;
+            Transform2DPackage transform2D;
+            FontPackage font;
+            TextPackage text;
             
             static void beginRendering(const Command& cmd);
             static void endRendering(const Command& cmd);
             void beginDepthRendering(const Command& cmd);
             void endDepthRendering(const Command& cmd);
+            // Clears the depth attachment of the running dynamic rendering (2D must not interfere with the 3D scene).
+            static void clearDepth(const Command& cmd);
             
             static void copyBarrier(const Command& cmd);
             static void transferBarrier(const Command& cmd);

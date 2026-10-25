@@ -37,7 +37,7 @@ find_package(assimp REQUIRED)
 
 #find_package(recastnavigation CONFIG REQUIRED)
 
-#find_package(Freetype REQUIRED)
+find_package(Freetype REQUIRED)
 
 # --- Build Internal Libraries ---
 # Process the subdirectories to create our 'component_lib' and 'core_lib' targets.

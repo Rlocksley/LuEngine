@@ -7,6 +7,9 @@
 #include "component/MultiMesh.hpp"
 #include "component/Light.hpp"
 #include "CameraData.hpp"
+#include "Camera2DData.hpp"
+#include "component/Transform2D.hpp"
+#include "component/Text.hpp"
 
 namespace Lu{
 
@@ -102,6 +105,45 @@ namespace Lu{
             CameraData cameraData;
         };
 
+        // ---- 2D / text ---------------------------------------------------------------
+        // CreateTransform2D is an upsert (like CreateTransform). UpdateTransform2D is normally sent through the
+        // Transform2D triple buffer (TripleBuffers.hpp); it is also accepted through the channel.
+        struct CreateTransform2D{
+            flecs::entity_t entity;
+            Component::Transform2D transform;
+        };
+
+        struct UpdateTransform2D{
+            flecs::entity_t entity;
+            Component::Transform2D transform;
+        };
+
+        struct DestroyTransform2D{
+            flecs::entity_t entity;
+        };
+
+        // Upsert: the first request creates the text, later requests for the same entity update it
+        // (new string -> the n Font structs in the FontBuffer are re-allocated if n changed).
+        struct CreateText{
+            flecs::entity_t parent;     // entity with the Transform2D
+            flecs::entity_t entity;     // entity with the Text component
+            flecs::entity_t font;       // registered font
+            flecs::entity_t pipe;       // registered font pipeline
+            std::string text;
+            glm::vec4 color;
+            float size;
+            float lineSpacing;
+            TextAlign align;
+        };
+
+        struct DestroyText{
+            flecs::entity_t entity;
+        };
+
+        struct UpdateCamera2D{
+            Camera2DData cameraData;
+        };
+
         // ---- skeletons ------------------------------------------------------------
         // CreateSkeleton / CreateSkeletonMesh are "upsert": the first request creates the
         // GPU object, later requests for the same entity update it (new asset, material,
@@ -137,7 +179,8 @@ namespace Lu{
         };
 
         using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMeshTransform, DestroyMeshTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera,
-            CreateSkeleton, DestroySkeleton, CreateSkeletonMesh, DestroySkeletonMesh>;
+            CreateSkeleton, DestroySkeleton, CreateSkeletonMesh, DestroySkeletonMesh,
+            CreateTransform2D, UpdateTransform2D, DestroyTransform2D, CreateText, DestroyText, UpdateCamera2D>;
 
     }
 

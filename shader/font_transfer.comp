@@ -1,0 +1,51 @@
+#version 450
+
+// Mirrors C++ Lu::Core::Font (80 bytes). One glyph of a Text.
+struct Font{
+    vec4 uvRect;          // u0, v0, u1, v1
+    vec4 color;
+    vec2 offset;          // top-left of the quad relative to the text origin (pixels)
+    vec2 size;            // quad size (pixels)
+    uint textureId;
+    uint transform2DId;
+    uint pipelineId;
+    uint valid;
+    uint glyphIndex;
+    uint glyphCount;
+    float sdf;
+    uint pad0;
+};
+
+// Same layout as C++ FontInstance: Font (80) + id and padding (16).
+struct FontInstance {
+    Font font;
+    uint id;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer InputBuffer {
+    FontInstance instances[];
+};
+
+// The Font struct lands at the position of its id
+layout(std430, binding = 1) writeonly buffer FontBuffer {
+    Font fonts[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint instanceBufferSize;
+} pc;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= pc.instanceBufferSize) {
+        return;
+    }
+
+    FontInstance instance = instances[index];
+    fonts[instance.id] = instance.font;
+}

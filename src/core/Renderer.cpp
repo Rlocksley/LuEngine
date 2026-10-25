@@ -31,7 +31,11 @@ namespace Lu{
                 MAX_INDICES_PER_MESH,
                 MAX_SKELETON_MESH_INFOS
             ),
-            skeleton(camera, lights, transform, texture, skeletonGeometry) {
+            skeleton(camera, lights, transform, texture, skeletonGeometry),
+            camera2D(),
+            transform2D(),
+            font(camera2D, transform2D, texture),
+            text(camera2D, transform2D, font) {
         }
 
         Renderer::~Renderer() {
@@ -96,16 +100,31 @@ namespace Lu{
             multiMesh.createComputePipeline(entity, config);
         }
 
+        void Renderer::createFontPipe(const FontPipeEntity entity, const GraphicsPipelineConfig& config){
+            const FontPipeId pipeId = font.createFontPipe(entity, config);
+            text.createIndirectBuffer(pipeId, config.capacity);
+        }
+
+        void Renderer::createFont(const FontEntity entity, const flecs::entity_t atlasEntity, const FontConfig& config){
+            font.createFont(entity, atlasEntity, config, texture);
+            // the atlas is a new element of the global texture array
+            mesh.updateDescriptorSetWrites();
+            skeleton.updateDescriptorSetWrites();
+            font.updateDescriptorSetWrites();
+        }
+
         void Renderer::createTexture(const TextureEntity entity, const std::string& filePath){
             texture.createTexture(entity, filePath);
             mesh.updateDescriptorSetWrites();
             skeleton.updateDescriptorSetWrites();
+            font.updateDescriptorSetWrites();
         }
 
         void Renderer::createTexture(const TextureEntity entity, TextureCpu&& textureCpu){
             texture.createTexture(entity, std::move(textureCpu));
             mesh.updateDescriptorSetWrites();
             skeleton.updateDescriptorSetWrites();
+            font.updateDescriptorSetWrites();
         }
         
         void Renderer::processEcsRequests(){
@@ -212,6 +231,36 @@ namespace Lu{
 
                         [&](const EcsRequest::UpdateCamera& req){
                             camera.update(req);
+                        },
+
+                        [&](const EcsRequest::UpdateCamera2D& req){
+                            camera2D.update(req);
+                        },
+
+                        [&](const EcsRequest::CreateTransform2D& req){
+                            transform2D.createTransform2D(req.entity, req.transform);
+                        },
+
+                        [&](const EcsRequest::UpdateTransform2D& req){
+                            transform2D.updateTransform2D(req.entity, req.transform);
+                        },
+
+                        [&](const EcsRequest::DestroyTransform2D& req){
+                            transform2D.destroyTransform2D(req.entity);
+                        },
+
+                        [&](const EcsRequest::CreateText& req){
+                            text.createText(
+                                req.entity,
+                                transform2D.getTransform2DId(req.parent),
+                                font.getFontId(req.font),
+                                font.getFontPipeId(req.pipe),
+                                req.text, req.color, req.size, req.lineSpacing, req.align
+                            );
+                        },
+
+                        [&](const EcsRequest::DestroyText& req){
+                            text.destroyText(req.entity);
                         }
 
                     }, 
@@ -236,6 +285,7 @@ namespace Lu{
             // Apply the latest dynamic transforms after lifecycle requests have
             // established or removed entity-to-transform ID mappings.
             transform.updateTransforms();
+            transform2D.updateTransforms();
 
             // Latest animated skeleton poses (triple buffer) -> staging buffer of this frame
             skeleton.updatePoses(frameIndex);
@@ -245,6 +295,8 @@ namespace Lu{
             mesh.collectDirty(frameIndex);
             multiMesh.collectDirty(frameIndex);
             skeleton.collectDirty(frameIndex);
+            transform2D.collectDirty(frameIndex);
+            text.collectDirty(frameIndex);
         }
 
         void Renderer::record(){
@@ -273,6 +325,9 @@ namespace Lu{
             multiMesh.copy(frameIndex, cmd);
             skeletonGeometry.copy(frameIndex, cmd);
             skeleton.copy(frameIndex, cmd);
+            camera2D.copy(frameIndex, cmd);
+            transform2D.copy(frameIndex, cmd);
+            text.copy(frameIndex, cmd);
             
             //Pipeline Barrier
             copyBarrier(cmd);
@@ -285,6 +340,8 @@ namespace Lu{
             mesh.transfer(frameIndex, cmd);
             multiMesh.transfer(frameIndex, cmd);
             skeleton.transfer(frameIndex, cmd);   // poses -> SkeletonBuffer, mesh instances
+            transform2D.transfer(frameIndex, cmd);
+            text.transfer(frameIndex, cmd);       // glyph instances -> FontBuffer
 
             //Pipeline Barrier
             transferBarrier(cmd);
@@ -293,6 +350,7 @@ namespace Lu{
             mesh.cull(frameIndex, cmd);
             multiMesh.cull(frameIndex, cmd);
             skeleton.cull(frameIndex, cmd);
+            text.cull(frameIndex, cmd);           // one indirect draw command per visible glyph
 
             //Pipeline Barrier
             cullBarrier(cmd);
@@ -328,6 +386,13 @@ namespace Lu{
             mesh.draw(frameIndex, meshGeometry, cmd);
             multiMesh.draw(frameIndex, meshGeometry, cmd);
             skeleton.draw(frameIndex, skeletonGeometry, cmd);
+
+            // 2D text: the 3D scene is complete, so clear the depth image. The glyphs are then only depth tested
+            // against each other (Transform2D::positionZ) and never against the 3D visuals recorded before.
+            if (text.hasGlyphs()) {
+                clearDepth(cmd);
+                text.draw(frameIndex, cmd);
+            }
 
             //end dynamic rendering
             endRendering(cmd);
@@ -381,6 +446,20 @@ namespace Lu{
 
             vkCmdBeginRendering(cmd.vkCommandBuffer, &renderingInfo);
             depthMapInitialized = true;
+        }
+
+        void Renderer::clearDepth(const Command& cmd) {
+            VkClearAttachment clearAttachment{};
+            clearAttachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            clearAttachment.clearValue.depthStencil = {1.0f, 0};
+
+            VkClearRect clearRect{};
+            clearRect.rect.offset = {0, 0};
+            clearRect.rect.extent = vkExtent2D;
+            clearRect.baseArrayLayer = 0;
+            clearRect.layerCount = 1;
+
+            vkCmdClearAttachments(cmd.vkCommandBuffer, 1, &clearAttachment, 1, &clearRect);
         }
 
         void Renderer::endDepthRendering(const Command& cmd) {

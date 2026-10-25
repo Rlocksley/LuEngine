@@ -513,6 +513,105 @@ namespace Lu
             }
         };
 
+        // First-fit allocator for contiguous element ranges inside a buffer of `capacity` elements
+        // (same strategy as BufferRanges, but without owning a VkBuffer).
+        // Freed ranges are merged with their neighbours; freeing the range at the very top lowers `top`,
+        // so `top` is always the exclusive upper bound of every element that is in use.
+        struct RangeAllocator {
+            struct Range {
+                uint32_t offset{0};
+                uint32_t size{0};
+            };
+
+            uint32_t capacity{0};
+            uint32_t top{0};
+            std::vector<Range> freeRanges;   // sorted by offset, never adjacent
+
+            explicit RangeAllocator(uint32_t capacity) : capacity(capacity) {}
+
+            Range allocate(uint32_t count){
+                LU_ASSERT(count > 0, "RangeAllocator", "allocate", "Range size must be greater than zero.")
+
+                for(size_t i = 0; i < freeRanges.size(); ++i){
+                    if(freeRanges[i].size < count){
+                        continue;
+                    }
+                    const Range result{freeRanges[i].offset, count};
+                    if(freeRanges[i].size == count){
+                        freeRanges.erase(freeRanges.begin() + static_cast<ptrdiff_t>(i));
+                    } else {
+                        freeRanges[i].offset += count;
+                        freeRanges[i].size -= count;
+                    }
+                    return result;
+                }
+
+                LU_ASSERT(top <= capacity && count <= capacity - top,
+                    "RangeAllocator", "allocate", "Buffer range capacity exceeded.")
+                const Range result{top, count};
+                top += count;
+                return result;
+            }
+
+            void free(const Range range){
+                LU_ASSERT(range.size > 0 && range.offset <= capacity && range.size <= capacity - range.offset,
+                    "RangeAllocator", "free", "Invalid buffer range.")
+
+                // insert sorted
+                auto it = std::lower_bound(freeRanges.begin(), freeRanges.end(), range,
+                    [](const Range& left, const Range& right){ return left.offset < right.offset; });
+                it = freeRanges.insert(it, range);
+
+                // merge with the successor, then with the predecessor
+                if(it + 1 != freeRanges.end() && it->offset + it->size == (it + 1)->offset){
+                    it->size += (it + 1)->size;
+                    freeRanges.erase(it + 1);
+                }
+                if(it != freeRanges.begin() && (it - 1)->offset + (it - 1)->size == it->offset){
+                    (it - 1)->size += it->size;
+                    freeRanges.erase(it);
+                }
+
+                // give the top back
+                if(!freeRanges.empty() && freeRanges.back().offset + freeRanges.back().size == top){
+                    top = freeRanges.back().offset;
+                    freeRanges.pop_back();
+                }
+            }
+        };
+
+        // Per-frame-in-flight GPU buffer whose elements are handed out in contiguous ranges
+        // (a SlotBuffer hands out single elements, GeometryPackage's BufferRanges is not replicated per frame).
+        // Used for the FontBuffer: a Text with n characters allocates a range of n Font structs.
+        template<typename T>
+        struct RangeBuffer : public IBufferResource{
+            using Range = RangeAllocator::Range;
+
+            RangeAllocator allocator;
+            std::array<Buffer<T>, MAX_FRAMES_IN_FLIGHT> buffer;
+
+            explicit RangeBuffer(uint32_t size, VkBufferUsageFlags usage) :
+                allocator(size),
+                buffer(makeBuffers(size, usage, std::make_index_sequence<MAX_FRAMES_IN_FLIGHT>{})){}
+
+            VkBuffer getVkBuffer(uint32_t frameIndex) const override {return buffer[frameIndex].vkBuffer;}
+            VkBufferUsageFlags getVkBufferUsage() const override {return buffer[0].usage;}
+
+            Range allocate(uint32_t count){ return allocator.allocate(count); }
+            void free(const Range range){ allocator.free(range); }
+
+            // exclusive upper bound of all elements in use (dispatch size of the cull shader)
+            uint32_t size() const { return allocator.top; }
+            uint32_t capacity() const { return allocator.capacity; }
+
+        private:
+            template<size_t... Frames>
+            static std::array<Buffer<T>, MAX_FRAMES_IN_FLIGHT> makeBuffers(
+                uint32_t size, VkBufferUsageFlags usage, std::index_sequence<Frames...>) {
+                return {{(static_cast<void>(Frames), Buffer<T>(size, usage))...}};
+            }
+        };
+
         template<typename T>
         struct SlotBuffer : public IBufferResource{
             uint32_t sizeGpu;

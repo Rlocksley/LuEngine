@@ -65,6 +65,15 @@ SkeletonPackage.hpp
 AnimationLibrary.hpp
 TripleBuffer.hpp
 Channel.hpp
+Camera2DData.hpp
+Camera2DPackage.hpp
+Transform2DPackage.hpp
+FontPackage.hpp
+FontPackage.cpp
+FontAtlas.hpp
+FontAtlas.cpp
+TextPackage.hpp
+TextLayout.hpp
 )
 
 target_link_libraries(lu_core PUBLIC
@@ -74,4 +83,5 @@ target_link_libraries(lu_core PUBLIC
     glfw            # The imported target for GLFW3
     flecs::flecs
     assimp::assimp  # The imported target for Assimp
+    Freetype::Freetype  # glyph rasterization (FontPackage)
 )

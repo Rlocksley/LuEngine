@@ -39,6 +39,18 @@ namespace Lu{
         VkBlendFactor dstColorBlendFactor{VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA};
     };
 
+    // Describes a font that is rasterized with FreeType into one atlas texture (App::registerFont).
+    struct FontConfig{
+        std::string name;                 // name of the flecs entity that Component::Text::font refers to
+        std::string filePath;             // .ttf / .otf / ... file (anything FreeType can open)
+        uint32_t pixelSize{48};           // size the glyphs are rasterized at; texts are scaled from it
+        // true: signed distance field atlas (FreeType >= 2.11), stays sharp when scaled/rotated
+        // false: plain 8 bit coverage bitmap, best at exactly Component::Text::size == pixelSize
+        bool sdf{true};
+        // inclusive unicode ranges that go into the atlas (default: printable ASCII + Latin-1 supplement)
+        std::vector<std::pair<uint32_t, uint32_t>> codepointRanges{{32, 126}, {160, 255}};
+    };
+
     struct ComputePipelineConfig{
         std::string name;
         std::string computeShader;

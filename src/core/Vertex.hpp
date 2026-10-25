@@ -59,6 +59,21 @@ namespace Lu
             }
         };
 
+        // Glyph quads are generated in the vertex shader from gl_VertexIndex (6 vertices per glyph),
+        // so the font pipelines have no vertex buffer and no vertex attributes.
+        struct Glyph{
+            static VkVertexInputBindingDescription getBindingDescription() {
+                VkVertexInputBindingDescription bindingDescription{};
+                bindingDescription.binding = 0;
+                bindingDescription.stride = 0;      // stride 0 => GraphicsPipeline creates no vertex binding
+                bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+                return bindingDescription;
+            }
+
+            static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions() { return {}; }
+            static std::vector<VkVertexInputAttributeDescription> getDepthAttributeDescriptions() { return {}; }
+        };
+
         struct Skeleton
         {
             glm::vec3 position;

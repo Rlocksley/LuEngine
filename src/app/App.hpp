@@ -10,6 +10,9 @@
 #include "modul/TransformGpuModule.hpp"
 #include "modul/MultiMeshGpuModule.hpp"
 #include "modul/LightModule.hpp"
+#include "modul/Transform2DGpuModule.hpp"
+#include "modul/Camera2DModule.hpp"
+#include "modul/TextModule.hpp"
 #include "component/Mesh.hpp"
 #include "component/Skeleton.hpp"
 #include "component/AnimationStateMachine.hpp"
@@ -63,6 +66,42 @@ namespace Lu{
             renderer->createMeshPipe(world->entity(config.name.c_str()).id(), config);
 
             return *this;
+        }
+
+        // Pipeline for 2D text (vertex shader: shader/font_basic.vert, fragment shader: shader/font_basic.frag).
+        // config.capacity = maximum number of glyphs this pipeline draws per frame.
+        // Recommended: cullMode = VK_CULL_MODE_NONE, depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL.
+        App& registerFontPipe(const GraphicsPipelineConfig& config){
+            LU_ASSERT(config.name.size() > 0, "App", "registerFontPipe", "GraphicsPipelineConfig.name must be size bigger 0");
+            LU_ASSERT(config.capacity > 0, "App", "registerFontPipe", "GraphicsPipelineConfig::capacity must be bigger 0");
+            LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerFontPipe", "Entity with name: " + config.name + " already exists");
+
+            renderer->createFontPipe(world->entity(config.name.c_str()).id(), config);
+
+            return *this;
+        }
+
+        // Rasterizes a font with FreeType into an atlas texture. The entity `config.name` is what
+        // Component::Text::font refers to; the atlas is the texture entity "<name>::Atlas".
+        App& registerFont(const FontConfig& config){
+            LU_ASSERT(config.name.size() > 0, "App", "registerFont", "FontConfig.name must be size bigger 0");
+            LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerFont", "Entity with name: " + config.name + " already exists");
+            const std::string atlasName = config.name + "::Atlas";
+            LU_ASSERT(!world->lookup(atlasName.c_str()), "App", "registerFont", "Entity with name: " + atlasName + " already exists");
+
+            renderer->createFont(world->entity(config.name.c_str()).id(), world->entity(atlasName.c_str()).id(), config);
+
+            return *this;
+        }
+
+        App& registerFont(const std::string& name, const std::string& filePath,
+            const uint32_t pixelSize = 48, const bool sdf = true){
+            FontConfig config;
+            config.name = name;
+            config.filePath = filePath;
+            config.pixelSize = pixelSize;
+            config.sdf = sdf;
+            return registerFont(config);
         }
 
         App& registerMultiMeshPipe(const GraphicsPipelineConfig& config){
@@ -167,6 +206,10 @@ namespace Lu{
             world->import<Module::Material>();
             world->import<Module::Light>();
             world->import<Module::InputState>();
+            // 2D: Transform2D before Text, so the Transform2D slot exists on the renderer side before CreateText arrives
+            world->import<Module::Transform2DGpu>();
+            world->import<Module::Camera2D>();
+            world->import<Module::Text>();
 
             #ifdef LU_DEBUG
             // 1. Enable the embedded REST API server (runs on default port 27750)

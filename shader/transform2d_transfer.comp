@@ -1,0 +1,46 @@
+#version 450
+
+struct Transform2D{
+    mat4 model;
+    vec2 position;
+    vec2 scale;
+    vec4 rotation;     // quaternion
+    uint positionZ;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+// Same layout as C++ Transform2DInstance: Transform2D (112) + id and padding (16).
+struct Transform2DInstance {
+    Transform2D transform;
+    uint id;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer InputBuffer {
+    Transform2DInstance instances[];
+};
+
+// The Transform2D lands at the position of its id
+layout(std430, binding = 1) writeonly buffer Transform2DBuffer {
+    Transform2D transforms[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint instanceBufferSize;
+} pc;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= pc.instanceBufferSize) {
+        return;
+    }
+
+    Transform2DInstance instance = instances[index];
+    transforms[instance.id] = instance.transform;
+}

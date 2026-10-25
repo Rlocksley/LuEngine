@@ -19,6 +19,12 @@ namespace Lu{
             return meshTransforms;
         }
 
+        // Same as above, for the Transform2D components.
+        inline TripleBuffer<std::vector<EcsRequest::UpdateTransform2D>>& GetTransform2DTripleBuffer(){
+            static TripleBuffer<std::vector<EcsRequest::UpdateTransform2D>> transforms2D;
+            return transforms2D;
+        }
+
         // One ECS frame of skeleton poses. Both arrays are allocated once at full capacity.
         // The ECS worker threads reserve space with the two atomic cursors and write
         // their blended local poses directly into `poses` (no vectors, no locks); a single
