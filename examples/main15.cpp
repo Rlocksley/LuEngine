@@ -52,9 +52,12 @@ struct TextDemoModule {
                                     const Lu::Component::Transform2D& transform, const glm::vec4& color,
                                     float size, Lu::TextAlign align = Lu::TextAlign::Left,
                                     float lineSpacing = 1.0f, float maxWidth = 0.0f) {
-        const auto parent = world.entity(name).set<Lu::Component::Transform2D>(transform);
+        
         return world.entity((std::string(name) + "::Text").c_str())
-            .child_of(parent)
+            .set(flecs::Parent{
+                world.entity(name)
+                .set<Lu::Component::Transform2D>(transform)
+            })
             .set(Lu::Component::Text{
                 .text = string,
                 .font = world.lookup("Font::Main"),
@@ -82,14 +85,16 @@ struct TextDemoModule {
             })
             .add<Lu::Component::Transform>();
 
-        const auto cube = world.entity("Cube")
-            .set<Lu::Component::Transform>({
-                glm::vec3(0.0f), 
-                0.0f, glm::vec3(0.0f, 1.0f, 0.0f), 
-                glm::vec3(2.0f)})
-            .add<Lu::Component::TransformGpu>();
         world.entity("CubeMesh")
-            .child_of(cube)
+            .set(flecs::Parent{
+                world.entity("Cube")
+                .set<Lu::Component::Transform>({
+                    glm::vec3(0.0f), 
+                    0.0f, glm::vec3(0.0f, 1.0f, 0.0f), 
+                    glm::vec3(2.0f)
+                })
+                .add<Lu::Component::TransformGpu>()
+            })
             .set(Lu::Component::Mesh{ 
                 .mesh = world.lookup("Mesh::Cube"), 
                 .pipeline = world.lookup("MeshPipe::Basic") 
@@ -159,14 +164,45 @@ struct TextDemoModule {
         // word wrapping: maxWidth = width of the paragraph box in pixels. The same text, left / centered / right aligned.
         // For Center / Right the Transform2D position is the center / right edge of the box.
         const std::string paragraph =
-            "Word wrapping breaks a line at the last space that fits into maxWidth. "
-            "Verylongwordsthatdonotfitintotheboxarebrokenbetweencharacters.\nAn explicit newline still works.";
-        createText(world, "WrapLeft", paragraph, {.position = {24.0f, 280.0f}, .positionZ = 10},
-                   glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 20.0f, Lu::TextAlign::Left, 1.0f, 300.0f);
-        createText(world, "WrapCenter", paragraph, {.position = {24.0f + 150.0f, 480.0f}, .positionZ = 10},
-                   glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 20.0f, Lu::TextAlign::Center, 1.0f, 300.0f);
-        createText(world, "WrapRight", paragraph, {.position = {24.0f + 300.0f, 680.0f}, .positionZ = 10},
-                   glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 20.0f, Lu::TextAlign::Right, 1.0f, 300.0f);
+            std::string("Word wrapping breaks a line at the last space that fits into maxWidth. ") +
+            std::string("Verylongwordsthatdonotfitintotheboxarebrokenbetweencharacters.\n") +
+            std::string("An explicit newline still works.");
+
+        createText(
+            world, 
+            "WrapLeft", 
+            paragraph, 
+            {.position = {24.0f, 280.0f}, .positionZ = 10},
+            glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 
+            20.0f, 
+            Lu::TextAlign::Left, 
+            1.0f, 
+            300.0f
+        );
+
+        createText(
+            world, 
+            "WrapCenter", 
+            paragraph, 
+            {.position = {24.0f + 150.0f, 480.0f}, .positionZ = 10},
+            glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 
+            20.0f, 
+            Lu::TextAlign::Center, 
+            1.0f, 
+            300.0f
+        );
+
+        createText(
+            world, 
+            "WrapRight", 
+            paragraph, 
+            {.position = {24.0f + 300.0f, 680.0f}, .positionZ = 10},
+            glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 
+            20.0f, 
+            Lu::TextAlign::Right, 
+            1.0f, 
+            300.0f
+        );
 
         // centered text that rotates and is scaled; the pivot of the rotation is the Transform2D position
         createText(
@@ -221,7 +257,7 @@ struct TextDemoModule {
 int main(int argc, char** argv) {
     const std::string fontPath = findFont(argc, argv);
 
-    Lu::App("LuEngine Text", false, 1280, 800)
+    Lu::App("LuEngine Text", false, 1280, 900)
         .registerMeshPipe(Lu::GraphicsPipelineConfig{
             .name = "MeshPipe::Basic",
             .capacity = 4,
@@ -246,7 +282,7 @@ int main(int argc, char** argv) {
             .vertexShader = "shader/font_basic.vert.spv",
             .fragmentShader = "shader/font_basic.frag.spv",
             .cullMode = VK_CULL_MODE_NONE,
-            .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL      // glyphs of the same layer overlap slightly
+            .depthCompareOp = VK_COMPARE_OP_LESS     // glyphs of the same layer overlap slightly
         })
         .importModule<TextDemoModule>()
         .run();
