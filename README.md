@@ -17,14 +17,13 @@ The renderer is Vulkan-based.
 1.] clone the repo with `git clone https://github.com/Rlocksley/LuEngine` \
 2.] install CMake and the Vulkan SDK (Vulkan 1.4)\
 3.] install Visual Studio Code and install the Cpp and CMake Extensions\
-4.] clone vcpkg inside the parent directory of the LuEngine repo directory and `run vcpkg install [glfw3,glm,flecs,freetype]` \
+4.] clone vcpkg inside the parent directory of the LuEngine repo directory and run\
+`vcpkg install [glfw3,glm,flecs,joltphysics,assimp,freetype]` \
 5.] open the LuEngine repo in Visual Studio Code and right click `LuEngine/CMakeLists.txt` -> build\
 6.] compile the shaders `LuEngine/shader/compile.bat`\
 (you need to get glslc from the Vulkan SDK and paste it into the shader directory)\
 7.] for your own project, create a directory in `examples` and\
 copy/adjust the `examples/CMakeLists.txt` and `.vscode/launch.json` , `.vscode/tasks.json`
-
-- vcpkg dependencies configured by `.vscode/settings.json`: Vulkan headers/loader, GLFW, GLM, Flecs, and FreeType (add `freetype` there too)
 
 <details>
 <summary>1. Hello World</summary>
@@ -321,14 +320,17 @@ Lu::App("Text", false, 1280, 800)
     .importModule<MyModule>()
     .run();
 
-// in MyModule: the Transform2D is on the PARENT, the Text on a CHILD (like Transform / Mesh)
-auto label = world.entity("Label").set<Lu::Component::Transform2D>({
+auto label = world.entity("Label")
+.set<Lu::Component::Transform2D>({
     .position = {20.f, 20.f},      // pixels, origin top-left, y down
     .positionZ = 5,                // layer, higher = in front
     // .rotation, .scale
 });
-world.entity("LabelText").child_of(label).set(Lu::Component::Text{
-    .text = "Hello \xC3\xA4 World",   // UTF-8, '\n' = new line
+
+world.entity("LabelText")
+.set(Parent{label})
+.set(Lu::Component::Text{
+    .text = "Hello World",  
     .font = world.lookup("Font::Main"),
     .pipeline = world.lookup("FontPipe::Basic"),
     .color = glm::vec4(1.f),
@@ -336,35 +338,6 @@ world.entity("LabelText").child_of(label).set(Lu::Component::Text{
     .align = Lu::TextAlign::Left,
     .maxWidth = 400.f              // optional word wrapping, 0 = off (see below)
 });
-// change the string later with .set<Lu::Component::Text>(...) or modified<>(): it is the same EcsRequest::CreateText
+// change the string later with .set<Lu::Component::Text>(...) or .modified<Lu::Component::Text>():
 ```
-
-How it works on the renderer side:
-
-| ECS | Request | Renderer |
-|---|---|---|
-| `Component::Transform2D` | `CreateTransform2D` / `UpdateTransform2D` (triple buffer, per frame) / `DestroyTransform2D` | `Transform2DPackage`: `Transform2DInstanceBuffer` (elements `(Transform2D, id)`) -> transfer shader -> `Transform2DBuffer` |
-| `Component::Camera2D` | `UpdateCamera2D{Camera2DData}` | `Camera2DPackage`: uniform buffer read by the 2D shaders |
-| `Component::Text` | `CreateText` (create **and** update) / `DestroyText` | `TextPackage` |
-| `App::registerFont` | - | `FontPackage`: FreeType atlas -> global texture array, `entityToFontId`, `FontBuffer`, font pipelines |
-
-A text with n characters owns a range of n `Core::Font` structs in the `FontBuffer` (a range allocator like the vertex/index buffer of the
-`GeometryPackage`; if the new string has another length the old range is freed and a new one allocated). Each struct stores
-the `TextureId` of the atlas, the glyph rectangle, color, the parent's Transform2D slot, ... For every visible glyph `font_cull.comp` writes one
-`VkDrawIndirectCommand` (6 vertices, the glyph slot is passed in `firstVertex`), drawn with `vkCmdDrawIndirectCount` per font pipeline.
-Before the glyphs are drawn the depth image is cleared, so text never interferes with the 3D scene; glyphs of different `positionZ` layers
-are ordered by the depth test (fully transparent texels are discarded).
-
-**Word wrapping:** `Component::Text::maxWidth` (pixels, same unit as `size`, before the `Transform2D` scale) breaks a line at the last space
-or tab that still fits; the space stays at the end of the previous line and does not count towards its width, so `Center` / `Right` lines are
-aligned by their visible text. A word that is wider than `maxWidth` is broken between characters, and a line always keeps at least one
-character. `'\n'` still starts a new line, `maxWidth = 0` turns wrapping off. Wrapping does not change the number of glyphs of a text (it is
-still one `Font` struct per character), it only changes the glyph positions.
-
-`Camera2D` is optional (default: world pixel == screen pixel). `position` is the world point shown at `pivot` (fraction of the window,
-`(0.5, 0.5)` = center), `zoom` and `rotation` act around the pivot. `Component::Static` on an entity with a `Transform2D` skips the per-frame update.
-
-Limits and constants (`src/core/Constant.hpp`): `MAX_FONT_GLYPHS`, `MAX_GLYPHS_PER_TEXT`, `MAX_TRANSFORMS_2D`, `MAX_FONT_PIPELINES`.
-`FontConfig::sdf = false` gives a plain coverage atlas (best at exactly `size == pixelSize`), `FontConfig::codepointRanges` selects the unicode ranges
-of the atlas (default: ASCII + Latin-1); missing characters are drawn as `?`.
 </details>
