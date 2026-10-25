@@ -10,6 +10,7 @@
 #include "Camera2DData.hpp"
 #include "component/Transform2D.hpp"
 #include "component/Text.hpp"
+#include "component/Mesh2D.hpp"
 
 namespace Lu{
 
@@ -141,6 +142,22 @@ namespace Lu{
             flecs::entity_t entity;
         };
 
+        // Upsert: the first request creates the Mesh2D, later requests for the same entity update it.
+        struct CreateMesh2D{
+            flecs::entity_t parent;     // entity with the Transform2D (+ Transform2DGpu)
+            flecs::entity_t entity;     // entity with the Mesh2D component
+            flecs::entity_t mesh;       // registered 2D geometry
+            flecs::entity_t pipe;       // registered Mesh2D pipeline
+            flecs::entity_t texture;    // 0 = none
+            glm::vec4 color;
+            glm::vec4 uvRect;
+            glm::vec4 params;
+        };
+
+        struct DestroyMesh2D{
+            flecs::entity_t entity;
+        };
+
         struct UpdateCamera2D{
             Camera2DData cameraData;
         };
@@ -181,7 +198,7 @@ namespace Lu{
 
         using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMeshTransform, DestroyMeshTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera,
             CreateSkeleton, DestroySkeleton, CreateSkeletonMesh, DestroySkeletonMesh,
-            CreateTransform2D, UpdateTransform2D, DestroyTransform2D, CreateText, DestroyText, UpdateCamera2D>;
+            CreateTransform2D, UpdateTransform2D, DestroyTransform2D, CreateText, DestroyText, UpdateCamera2D, CreateMesh2D, DestroyMesh2D>;
 
     }
 

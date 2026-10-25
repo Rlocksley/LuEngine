@@ -5,6 +5,8 @@ project(LCA)
 add_library(lu_shape STATIC
     Shape.hpp
     Shape.cpp
+    Shape2D.hpp
+    Shape2D.cpp
 )
 
 target_include_directories(lu_shape PUBLIC ../core)

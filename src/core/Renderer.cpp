@@ -35,7 +35,15 @@ namespace Lu{
             camera2D(),
             transform2D(),
             font(camera2D, transform2D, texture),
-            text(camera2D, transform2D, font) {
+            text(camera2D, transform2D, font),
+            mesh2DGeometry(
+                MAX_MESH2D_VERTEX_BUFFER_SIZE,
+                MAX_MESH2D_INDEX_BUFFER_SIZE,
+                MAX_VERTICES_PER_MESH_2D,
+                MAX_INDICES_PER_MESH_2D,
+                MAX_MESH2D_INFOS
+            ),
+            mesh2D(camera2D, transform2D, texture, mesh2DGeometry) {
         }
 
         Renderer::~Renderer() {
@@ -100,6 +108,14 @@ namespace Lu{
             multiMesh.createComputePipeline(entity, config);
         }
 
+        void Renderer::createMesh2DPipe(const Mesh2DPipeEntity entity, const GraphicsPipelineConfig& config){
+            mesh2D.createMesh2DPipeline(entity, config);
+        }
+
+        void Renderer::createMesh2DGeometry(const Mesh2DGeometryEntity entity, const std::vector<Vertex::Vertex2D>& vb, const std::vector<uint32_t>& ib){
+            mesh2DGeometry.addGeometry(entity, vb, ib);
+        }
+
         void Renderer::createFontPipe(const FontPipeEntity entity, const GraphicsPipelineConfig& config){
             const FontPipeId pipeId = font.createFontPipe(entity, config);
             text.createIndirectBuffer(pipeId, config.capacity);
@@ -111,6 +127,7 @@ namespace Lu{
             mesh.updateDescriptorSetWrites();
             skeleton.updateDescriptorSetWrites();
             font.updateDescriptorSetWrites();
+            mesh2D.updateDescriptorSetWrites();
         }
 
         void Renderer::createTexture(const TextureEntity entity, const std::string& filePath){
@@ -118,6 +135,7 @@ namespace Lu{
             mesh.updateDescriptorSetWrites();
             skeleton.updateDescriptorSetWrites();
             font.updateDescriptorSetWrites();
+            mesh2D.updateDescriptorSetWrites();
         }
 
         void Renderer::createTexture(const TextureEntity entity, TextureCpu&& textureCpu){
@@ -125,6 +143,7 @@ namespace Lu{
             mesh.updateDescriptorSetWrites();
             skeleton.updateDescriptorSetWrites();
             font.updateDescriptorSetWrites();
+            mesh2D.updateDescriptorSetWrites();
         }
         
         void Renderer::processEcsRequests(){
@@ -261,6 +280,20 @@ namespace Lu{
 
                         [&](const EcsRequest::DestroyText& req){
                             text.destroyText(req.entity);
+                        },
+
+                        [&](const EcsRequest::CreateMesh2D& req){
+                            mesh2D.createMesh2D(
+                                req.entity, req.pipe,
+                                transform2D.getTransform2DId(req.parent),
+                                mesh2DGeometry.getGeometryInfoId(req.mesh),
+                                req.texture != 0 ? texture.getTextureId(req.texture) : UINT32_MAX,
+                                req.color, req.uvRect, req.params
+                            );
+                        },
+
+                        [&](const EcsRequest::DestroyMesh2D& req){
+                            mesh2D.destroyMesh2D(req.entity);
                         }
 
                     }, 
@@ -297,6 +330,7 @@ namespace Lu{
             skeleton.collectDirty(frameIndex);
             transform2D.collectDirty(frameIndex);
             text.collectDirty(frameIndex);
+            mesh2D.collectDirty(frameIndex);
         }
 
         void Renderer::record(){
@@ -317,6 +351,7 @@ namespace Lu{
             
             //Copy To GPU
             meshGeometry.copy(frameIndex, cmd);
+            mesh2DGeometry.copy(frameIndex, cmd);
             texture.copy(frameIndex, cmd);
             camera.copy(frameIndex, cmd);
             transform.copy(frameIndex, cmd);
@@ -328,6 +363,7 @@ namespace Lu{
             camera2D.copy(frameIndex, cmd);
             transform2D.copy(frameIndex, cmd);
             text.copy(frameIndex, cmd);
+            mesh2D.copy(frameIndex, cmd);
             
             //Pipeline Barrier
             copyBarrier(cmd);
@@ -342,6 +378,7 @@ namespace Lu{
             skeleton.transfer(frameIndex, cmd);   // poses -> SkeletonBuffer, mesh instances
             transform2D.transfer(frameIndex, cmd);
             text.transfer(frameIndex, cmd);       // glyph instances -> FontBuffer
+            mesh2D.transfer(frameIndex, cmd);     // Mesh2D instances -> Mesh2DBuffer
 
             //Pipeline Barrier
             transferBarrier(cmd);
@@ -351,6 +388,7 @@ namespace Lu{
             multiMesh.cull(frameIndex, cmd);
             skeleton.cull(frameIndex, cmd);
             text.cull(frameIndex, cmd);           // one indirect draw command per visible glyph
+            mesh2D.cull(frameIndex, cmd);         // one indirect draw command per visible Mesh2D
 
             //Pipeline Barrier
             cullBarrier(cmd);
@@ -387,10 +425,12 @@ namespace Lu{
             multiMesh.draw(frameIndex, meshGeometry, cmd);
             skeleton.draw(frameIndex, skeletonGeometry, cmd);
 
-            // 2D text: the 3D scene is complete, so clear the depth image. The glyphs are then only depth tested
-            // against each other (Transform2D::positionZ) and never against the 3D visuals recorded before.
-            if (text.hasGlyphs()) {
+            // 2D (GUI meshes + text): the 3D scene is complete, so clear the depth image. The 2D visuals are then only
+            // depth tested against each other (Transform2D::positionZ, a higher layer is in front, shared by Mesh2D and
+            // Text) and never against the 3D visuals recorded before. Meshes are drawn before the text.
+            if (mesh2D.hasMeshes() || text.hasGlyphs()) {
                 clearDepth(cmd);
+                mesh2D.draw(frameIndex, mesh2DGeometry, cmd);
                 text.draw(frameIndex, cmd);
             }
 

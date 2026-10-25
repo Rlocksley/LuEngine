@@ -49,6 +49,15 @@ namespace Lu{
         const uint32_t MAX_FONT_GLYPHS = 1024 * 32;
         const uint32_t MAX_GLYPHS_PER_TEXT = 4096;            // longer strings are truncated
 
+        // ---- 2D / Mesh2D (GUI) ----------------------------------------------
+        const uint32_t MAX_MESHES_2D = 1024 * 16;             // live Mesh2D components
+        const uint32_t MAX_MESH2D_PIPELINES = 64;
+        const uint32_t MAX_MESH2D_INFOS = 1024;               // registered 2D geometries
+        const uint32_t MAX_MESH2D_VERTEX_BUFFER_SIZE = 1024 * 256;
+        const uint32_t MAX_MESH2D_INDEX_BUFFER_SIZE = 1024 * 512;
+        const uint32_t MAX_VERTICES_PER_MESH_2D = 1024 * 64;  // per registered 2D geometry
+        const uint32_t MAX_INDICES_PER_MESH_2D = 1024 * 128;
+
 
         //careful: 
         //for this constants 

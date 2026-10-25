@@ -1,0 +1,123 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : enable
+
+// One thread per Mesh2D slot. Visible meshes append ONE draw command to the indirect buffer of their pipeline
+// (same scheme as mesh_cull.comp, without depth prepass): firstInstance = slot of the Mesh2D, which the vertex
+// shader reads as gl_InstanceIndex.
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+struct Transform2D{
+    mat4 model;
+    vec2 position;
+    vec2 scale;
+    vec4 rotation;
+    uint positionZ;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+struct GeometryInfo {
+    uint indexCount;
+    uint firstIndex;
+    uint vertexCount;
+    int  vertexOffset;
+    vec4 boundingSphere; // xy = local center, z = 0, w = radius (local pixels)
+};
+
+struct Mesh2D{
+    vec4 color;
+    vec4 uvRect;
+    vec4 params;
+    uint textureId;
+    uint transform2DId;
+    uint pipelineId;
+    uint meshInfoId;
+    uint valid;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+// Fits VkDrawIndexedIndirectCommand
+struct DrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int  vertexOffset;
+    uint firstInstance;
+};
+
+layout(set = 0, binding = 0) uniform Camera2DBuffer {
+    mat4 viewProjection;
+    mat4 view;
+    vec2 position;
+    vec2 screenSize;
+    float zoom;
+    float rotation;
+    float deltaTime;
+    float time;
+} camera;
+
+layout(set = 0, binding = 1) readonly buffer Transform2DBuffer {
+    Transform2D transforms[];
+} transforms;
+
+layout(set = 0, binding = 2) readonly buffer GeometryInfoBuffer {
+    GeometryInfo infos[];
+} geometryInfos;
+
+layout(set = 0, binding = 3) readonly buffer Mesh2DBuffer {
+    Mesh2D meshes[];
+} meshes;
+
+layout(set = 0, binding = 4) buffer DrawCountBuffer {
+    uint count[];
+} drawCounts;
+
+layout(set = 0, binding = 5) readonly buffer CapacityBuffer {
+    uint capacity[];
+} indirectCapacities;
+
+layout(set = 0, binding = 6) writeonly buffer IndirectDrawCommandBuffer {
+    DrawIndexedIndirectCommand commands[];
+} indirectBuffers[];
+
+void main() {
+    uint gID = gl_GlobalInvocationID.x;
+    if (gID >= meshes.meshes.length()) {
+        return;
+    }
+
+    Mesh2D mesh = meshes.meshes[gID];
+    if (mesh.valid == 0u) {
+        return;     // free slot
+    }
+
+    GeometryInfo info = geometryInfos.infos[mesh.meshInfoId];
+    Transform2D transform = transforms.transforms[mesh.transform2DId];
+
+    // Bounding circle of the geometry in clip space against the clip rectangle [-1, 1]^2.
+    // Radius: local radius * largest axis scale of the Transform2D * camera zoom, converted from pixels to clip units.
+    vec2 center = (camera.viewProjection * transform.model * vec4(info.boundingSphere.xy, 0.0, 1.0)).xy;
+    float worldRadius = info.boundingSphere.w * max(length(transform.model[0].xy), length(transform.model[1].xy));
+    vec2 radius = vec2(worldRadius * camera.zoom) * 2.0 / max(camera.screenSize, vec2(1.0));
+    if (center.x + radius.x < -1.0 || center.x - radius.x > 1.0 ||
+        center.y + radius.y < -1.0 || center.y - radius.y > 1.0) {
+        return;
+    }
+
+    uint pipelineId = mesh.pipelineId;
+    uint cmdIndex = atomicAdd(drawCounts.count[pipelineId], 1u);
+    if (cmdIndex >= indirectCapacities.capacity[pipelineId]) {
+        return;
+    }
+
+    DrawIndexedIndirectCommand cmd;
+    cmd.indexCount    = info.indexCount;
+    cmd.instanceCount = 1u;
+    cmd.firstIndex    = info.firstIndex;
+    cmd.vertexOffset  = info.vertexOffset;
+    cmd.firstInstance = gID;           // slot of the Mesh2D = gl_InstanceIndex in the vertex shader
+    indirectBuffers[nonuniformEXT(pipelineId)].commands[cmdIndex] = cmd;
+}

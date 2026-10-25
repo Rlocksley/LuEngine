@@ -13,6 +13,7 @@
 #include "modul/Transform2DGpuModule.hpp"
 #include "modul/Camera2DModule.hpp"
 #include "modul/TextModule.hpp"
+#include "modul/Mesh2DModule.hpp"
 #include "component/Mesh.hpp"
 #include "component/Skeleton.hpp"
 #include "component/AnimationStateMachine.hpp"
@@ -102,6 +103,38 @@ namespace Lu{
             config.pixelSize = pixelSize;
             config.sdf = sdf;
             return registerFont(config);
+        }
+
+        // Pipeline for 2D meshes (GUI): GraphicsPipeline<Vertex::Vertex2D>, e.g. shader/mesh2d_basic.vert/.frag.
+        // Set 0 of the shaders: binding 0 Camera2D (uniform), 1 Transform2D buffer, 2 Mesh2D buffer, 3 the global texture array
+        // (see Mesh2DPackage.hpp). config.capacity = maximum number of Mesh2D this pipeline draws per frame.
+        // Recommended: depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL (the default cull mode works with the Shape2D shapes).
+        App& registerMesh2DPipe(const GraphicsPipelineConfig& config){
+            LU_ASSERT(config.name.size() > 0, "App", "registerMesh2DPipe", "GraphicsPipelineConfig.name must be size bigger 0");
+            LU_ASSERT(config.capacity > 0, "App", "registerMesh2DPipe", "GraphicsPipelineConfig::capacity must be bigger 0");
+            LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerMesh2DPipe", "Entity with name: " + config.name + " already exists");
+
+            renderer->createMesh2DPipe(world->entity(config.name.c_str()).id(), config);
+
+            return *this;
+        }
+
+        // Registers 2D geometry (vertices in local pixels). The entity `name` is what Component::Mesh2D::mesh refers to.
+        App& registerMesh2D(const std::string& name,
+            const std::vector<Vertex::Vertex2D>& vertexBuffer, const std::vector<uint32_t>& indexBuffer){
+            LU_ASSERT(name.size() > 0, "App", "registerMesh2D", "name must be size bigger zer");
+            LU_ASSERT(!world->lookup(name.c_str()), "App", "registerMesh2D", "Entity with name: " + name + " already exists");
+
+            renderer->createMesh2DGeometry(world->entity(name.c_str()).id(), vertexBuffer, indexBuffer);
+
+            return *this;
+        }
+
+        // registerShape2D<Shape2D::Rectangle>("Mesh2D::Rect", glm::vec2(200, 80)) - see shape/Shape2D.hpp
+        template<typename Shape, typename ...Args>
+        App& registerShape2D(const std::string& name, Args&&... args){
+            Shape shape(std::forward<Args>(args)...);
+            return registerMesh2D(name, shape.getVertices(), shape.getIndices());
         }
 
         App& registerMultiMeshPipe(const GraphicsPipelineConfig& config){
@@ -210,6 +243,7 @@ namespace Lu{
             world->import<Module::Transform2DGpu>();
             world->import<Module::Camera2D>();
             world->import<Module::Text>();
+            world->import<Module::Mesh2D>();
 
             #ifdef LU_DEBUG
             // 1. Enable the embedded REST API server (runs on default port 27750)

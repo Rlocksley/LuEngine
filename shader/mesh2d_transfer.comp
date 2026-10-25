@@ -1,0 +1,50 @@
+#version 450
+
+// Mirrors C++ Lu::Core::Mesh2D (80 bytes).
+struct Mesh2D{
+    vec4 color;
+    vec4 uvRect;          // u offset, v offset, u scale, v scale
+    vec4 params;
+    uint textureId;       // 0xFFFFFFFF = none
+    uint transform2DId;
+    uint pipelineId;
+    uint meshInfoId;
+    uint valid;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+// Same layout as C++ Mesh2DInstance: Mesh2D (80) + id and padding (16).
+struct Mesh2DInstance {
+    Mesh2D mesh;
+    uint id;
+    uint pad0;
+    uint pad1;
+    uint pad2;
+};
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, binding = 0) readonly buffer InputBuffer {
+    Mesh2DInstance instances[];
+};
+
+// The Mesh2D lands at the position of its id
+layout(std430, binding = 1) writeonly buffer Mesh2DBuffer {
+    Mesh2D meshes[];
+};
+
+layout(push_constant) uniform PushConstants {
+    uint instanceBufferSize;
+} pc;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= pc.instanceBufferSize) {
+        return;
+    }
+
+    Mesh2DInstance instance = instances[index];
+    meshes[instance.id] = instance.mesh;
+}

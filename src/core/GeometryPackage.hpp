@@ -94,16 +94,24 @@ namespace Lu{
                         info.vertexCount = vertexRange.size;
                         info.vertexOffset = static_cast<int32_t>(vertexRange.offset);
                         if constexpr (requires(const Vertex& vertex) { vertex.position; }) {
-                            glm::vec3 minPosition = vertices.front().position;
+                            // position is a vec3 (3D vertices) or a vec2 (Vertex2D, z = 0)
+                            const auto toVec3 = [](const auto& position) {
+                                if constexpr (requires { position.z; }) {
+                                    return glm::vec3(position.x, position.y, position.z);
+                                } else {
+                                    return glm::vec3(position.x, position.y, 0.0f);
+                                }
+                            };
+                            glm::vec3 minPosition = toVec3(vertices.front().position);
                             glm::vec3 maxPosition = minPosition;
                             for(const Vertex& vertex : vertices){
-                                minPosition = glm::min(minPosition, vertex.position);
-                                maxPosition = glm::max(maxPosition, vertex.position);
+                                minPosition = glm::min(minPosition, toVec3(vertex.position));
+                                maxPosition = glm::max(maxPosition, toVec3(vertex.position));
                             }
                             const glm::vec3 center = (minPosition + maxPosition) * 0.5f;
                             float radius = 0.0f;
                             for(const Vertex& vertex : vertices){
-                                radius = glm::max(radius, glm::distance(vertex.position, center));
+                                radius = glm::max(radius, glm::distance(toVec3(vertex.position), center));
                             }
                             info.boundingSphere = glm::vec4(center, radius);
                         }

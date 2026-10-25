@@ -16,6 +16,7 @@
 #include "Transform2DPackage.hpp"
 #include "FontPackage.hpp"
 #include "TextPackage.hpp"
+#include "Mesh2DPackage.hpp"
 #include "Channel.hpp"
 #include "FramerateMonitor.hpp"
 
@@ -56,6 +57,12 @@ namespace Lu{
             using FontEntity = flecs::entity_t;
             void createFont(const FontEntity entity, const flecs::entity_t atlasEntity, const FontConfig& config);
 
+            using Mesh2DPipeEntity = flecs::entity_t;
+            void createMesh2DPipe(const Mesh2DPipeEntity entity, const GraphicsPipelineConfig& config);
+
+            using Mesh2DGeometryEntity = flecs::entity_t;
+            void createMesh2DGeometry(const Mesh2DGeometryEntity entity, const std::vector<Vertex::Vertex2D>& vb, const std::vector<uint32_t>& ib);
+
             using TextureEntity = flecs::entity_t;
             void createTexture(const TextureEntity entity, const std::string& filePath);
             void createTexture(const TextureEntity entity, TextureCpu&& texture);
@@ -88,6 +95,10 @@ namespace Lu{
             Transform2DPackage transform2D;
             FontPackage font;
             TextPackage text;
+
+            // 2D meshes (GUI): geometry of the registered 2D shapes + the Mesh2D instances
+            GeometryPackage<Vertex::Vertex2D> mesh2DGeometry;
+            Mesh2DPackage mesh2D;
             
             static void beginRendering(const Command& cmd);
             static void endRendering(const Command& cmd);

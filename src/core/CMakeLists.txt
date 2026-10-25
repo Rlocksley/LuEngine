@@ -73,6 +73,7 @@ FontPackage.cpp
 FontAtlas.hpp
 FontAtlas.cpp
 TextPackage.hpp
+Mesh2DPackage.hpp
 TextLayout.hpp
 )
 
