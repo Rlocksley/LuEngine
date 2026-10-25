@@ -4,30 +4,36 @@
 #include "Channel.hpp"
 #include "component/Text.hpp"
 #include "component/Transform2D.hpp"
+#include "component/Transform2DGpu.hpp"
 
 namespace Lu {
 namespace Module {
-    // Component::Text (on a child of an entity with a Component::Transform2D) -> EcsRequest::CreateText / DestroyText.
-    // Same structure as the Mesh module.
+    // Component::Text (on a child of an entity with a Component::Transform2D AND a Component::Transform2DGpu)
+    // -> EcsRequest::CreateText / DestroyText. The parent has to be mirrored by the GPU, because the renderer
+    // resolves its Transform2D slot. Same structure as the Mesh module.
     struct Text{
         Text(flecs::world& world){
             world.component<Component::Text>();
 
-            // Text added / changed while the parent has a Transform2D
+            // Text added / changed while the parent has a Transform2D and a Transform2DGpu
             world.observer<const Component::Text>()
                 .with<Component::Transform2D>().filter()
+                .with<Component::Transform2DGpu>().filter()
                 .term_at(1).up()
+                .term_at(2).up()
                 .event(flecs::OnAdd)
                 .event(flecs::OnSet)
                 .each([](flecs::entity e, const Component::Text&) {
                     e.add<Component::TextGpuDirty>();
                 });
 
-            // Transform2D added to the parent after the Text exists
+            // Transform2D / Transform2DGpu added to the parent after the Text exists
             world.observer()
                 .with<Component::Text>().filter()
                 .with<Component::Transform2D>()
+                .with<Component::Transform2DGpu>()
                 .term_at(1).up()
+                .term_at(2).up()
                 .event(flecs::OnAdd)
                 .each([](flecs::entity e) {
                     e.add<Component::TextGpuDirty>();
@@ -44,7 +50,7 @@ namespace Module {
                             auto entity = it.entity(i);
                             const auto parent = entity.parent();
                             const Component::Text& text = texts[i];
-                            if (parent.is_valid() && parent.has<Component::Transform2D>() &&
+                            if (parent.is_valid() && parent.has<Component::Transform2D>() && parent.has<Component::Transform2DGpu>() &&
                                 text.font.id() != 0 && text.pipeline.id() != 0) {
                                 requests.push_back(EcsRequest::CreateText{
                                     parent.id(), entity.id(), text.font.id(), text.pipeline.id(),
@@ -59,7 +65,9 @@ namespace Module {
 
             world.observer<const Component::Text>()
                 .with<Component::Transform2D>()
+                .with<Component::Transform2DGpu>()
                 .term_at(1).up()
+                .term_at(2).up()
                 .event(flecs::OnRemove)
                 .each([](flecs::entity e, const Component::Text&) {
                     GetChannel().send(EcsRequest::DestroyText{e.id()});

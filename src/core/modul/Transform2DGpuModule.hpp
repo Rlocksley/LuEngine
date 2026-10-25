@@ -4,20 +4,24 @@
 #include "Channel.hpp"
 #include "TripleBuffers.hpp"
 #include "component/Transform2D.hpp"
+#include "component/Transform2DGpu.hpp"
 #include "component/Transform.hpp"     // Component::Static
 
 namespace Lu {
 namespace Module {
-    // Mirrors every Component::Transform2D to the renderer's Transform2DPackage:
+    // Mirrors every Component::Transform2D that also has a Component::Transform2DGpu to the renderer's
+    // Transform2DPackage (same structure as Module::TransformGpu):
     //   add/set  -> EcsRequest::CreateTransform2D (upsert)
-    //   remove   -> EcsRequest::DestroyTransform2D
+    //   remove   -> EcsRequest::DestroyTransform2D (also when only the Transform2DGpu tag is removed)
     //   each frame (entities without Component::Static) -> EcsRequest::UpdateTransform2D via the triple buffer
     // Imported before Module::Text, so the slot exists on the renderer side before CreateText arrives.
     struct Transform2DGpu{
         Transform2DGpu(flecs::world& world){
             world.component<Component::Transform2D>();
+            world.component<Component::Transform2DGpu>();
 
             world.observer<const Component::Transform2D>()
+                .with<Component::Transform2DGpu>()
                 .event(flecs::OnAdd)
                 .event(flecs::OnSet)
                 .each([](flecs::entity entity, const Component::Transform2D&){
@@ -25,6 +29,7 @@ namespace Module {
                 });
 
             world.system<const Component::Transform2D>("EcsRequest::CreateTransform2D System")
+                .with<Component::Transform2DGpu>()
                 .with<Component::Transform2DGpuDirty>()
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> requests;
@@ -42,12 +47,14 @@ namespace Module {
                 });
 
             world.observer<const Component::Transform2D>()
+                .with<Component::Transform2DGpu>()
                 .event(flecs::OnRemove)
                 .each([](flecs::entity entity, const Component::Transform2D&){
                     GetChannel().send(EcsRequest::DestroyTransform2D{entity.id()});
                 });
 
             world.system<const Component::Transform2D>("EcsRequest::UpdateTransform2D System")
+                .with<Component::Transform2DGpu>()
                 .without<Component::Static>()
                 .run([](flecs::iter it){
                     Core::GetTransform2DTripleBuffer().write(

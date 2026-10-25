@@ -12,7 +12,11 @@ namespace Lu {
         //      auto label = world.entity("Label").set<Component::Transform2D>({.position = {20.f, 20.f}});
         //      world.entity("LabelText").child_of(label).set<Component::Text>({...});
         //
-        // It is mirrored into the Transform2DPackage of the renderer automatically (no extra tag needed).
+        // It is only mirrored into the Transform2DPackage of the renderer if the entity also has a
+        // Component::Transform2DGpu (see Transform2DGpu.hpp), exactly like Transform / TransformGpu:
+        //
+        //      world.entity("Label").set<Component::Transform2D>({...}).add<Component::Transform2DGpu>();
+        //
         // Add Component::Static if it never changes after it was set, to save the per-frame update.
         struct Transform2D {
             glm::vec2 position{0.0f, 0.0f};
@@ -36,7 +40,5 @@ namespace Lu {
                 return translationMat * rotationMat * scaleMat;
             }
         };
-
-        struct Transform2DGpuDirty{};
     }
 }

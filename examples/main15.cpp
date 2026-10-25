@@ -6,6 +6,7 @@
 #include "component/Transform.hpp"
 #include "component/TransformGpu.hpp"
 #include "component/Transform2D.hpp"
+#include "component/Transform2DGpu.hpp"
 #include "component/Camera2D.hpp"
 #include "component/Text.hpp"
 #include <filesystem>
@@ -57,6 +58,7 @@ struct TextDemoModule {
             .set(flecs::Parent{
                 world.entity(name)
                 .set<Lu::Component::Transform2D>(transform)
+                .add<Lu::Component::Transform2DGpu>()      // mirrored by the GPU (like TransformGpu)
             })
             .set(Lu::Component::Text{
                 .text = string,
