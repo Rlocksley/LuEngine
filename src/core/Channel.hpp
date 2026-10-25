@@ -134,6 +134,7 @@ namespace Lu{
             float size;
             float lineSpacing;
             TextAlign align;
+            float maxWidth;             // 0 = no word wrapping
         };
 
         struct DestroyText{

@@ -255,7 +255,7 @@ namespace Lu{
                                 transform2D.getTransform2DId(req.parent),
                                 font.getFontId(req.font),
                                 font.getFontPipeId(req.pipe),
-                                req.text, req.color, req.size, req.lineSpacing, req.align
+                                req.text, req.color, req.size, req.lineSpacing, req.align, req.maxWidth
                             );
                         },
 

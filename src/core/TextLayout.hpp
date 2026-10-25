@@ -44,10 +44,16 @@ namespace Lu{
         // Lays the codepoints out into one Font struct per codepoint (whitespace/newlines get valid = 0, so the n characters
         // of a text always map to exactly n structs). Origin = top-left of the first line, y points down, units are pixels.
         // Pure function (no Vulkan), the TextPackage writes the result into its range of the FontBuffer.
-            // Fills the Font structs of `range`. Origin = top-left of the first line, y points down.
+        //
+        // Word wrapping: with maxWidth > 0 (pixels, same unit as `size`, before the Transform2D scale) a line is broken
+        // at the last space/tab that fits; the space stays at the end of the previous line and does not count towards its width.
+        // A word that is wider than maxWidth on its own is broken between two characters. A line always keeps at least
+        // one character, so a single glyph that is wider than maxWidth overflows instead of looping forever.
+        // maxWidth <= 0 turns wrapping off (only '\n' breaks lines).
         inline std::vector<Font> layoutText(const FontData& font, const std::vector<uint32_t>& codepoints,
                         const uint32_t transform2DId, const uint32_t pipeId, const glm::vec4& color,
-                        const float size, const float lineSpacing, const TextAlign align)
+                        const float size, const float lineSpacing, const TextAlign align,
+                        const float maxWidth = 0.0f)
             {
                 const uint32_t count = static_cast<uint32_t>(codepoints.size());
                 std::vector<Font> result(count);
@@ -56,40 +62,81 @@ namespace Lu{
                 const float scale = size / font.pixelSize;
                 const float lineAdvance = font.lineHeight * lineSpacing * scale;
 
-                // pass 1: pen x (in atlas pixels) of every glyph and width of every line
+                // maxWidth in atlas pixels (the pen is measured at the rasterization size of the font)
+                const float maxPen = maxWidth > 0.0f ? maxWidth / scale : 0.0f;
+
+                // pass 1: line and pen x (in atlas pixels) of every glyph
                 std::vector<float> penX(count, 0.0f);
                 std::vector<uint32_t> lineOf(count, 0);
-                std::vector<float> lineWidth(1, 0.0f);
+                const float spaceAdvance = font.glyph(' ').advance;
+                constexpr uint32_t NO_BREAK = UINT32_MAX;
+
                 float pen = 0.0f;
                 uint32_t line = 0;
                 uint32_t previous = 0;
-                for(uint32_t i = 0; i < count; ++i){
+                bool lineHasContent = false;      // a non-whitespace glyph was placed on the current line
+                uint32_t breakIndex = NO_BREAK;   // first glyph after the last space of the current line = where a wrap may start
+
+                uint32_t i = 0;
+                while(i < count){
                     const uint32_t codepoint = codepoints[i];
                     lineOf[i] = line;
+
                     if(codepoint == '\n'){
                         penX[i] = pen;
                         ++line;
-                        lineWidth.push_back(0.0f);
                         pen = 0.0f;
                         previous = 0;
+                        lineHasContent = false;
+                        breakIndex = NO_BREAK;
+                        ++i;
                         continue;
                     }
                     if(codepoint == '\r'){
                         penX[i] = pen;
+                        ++i;
                         continue;
                     }
-                    if(codepoint == '\t'){
-                        penX[i] = pen;
-                        pen += 4.0f * font.glyph(' ').advance;
-                        lineWidth[line] = pen;
+
+                    const bool tab = codepoint == '\t';
+                    const bool space = codepoint == ' ' || tab;
+                    const float kern = tab ? 0.0f : font.kern(previous, codepoint);
+                    const float start = pen + kern;
+                    const float end = start + (tab ? 4.0f * spaceAdvance : font.glyph(codepoint).advance);
+
+                    // A visible glyph that does not fit moves to a new line, together with the word it belongs to.
+                    // (Spaces never wrap, they hang over the edge. A line without content cannot wrap: it would only be empty.)
+                    if(maxPen > 0.0f && !space && lineHasContent && end > maxPen){
+                        const uint32_t wrapStart = breakIndex != NO_BREAK ? breakIndex : i;
+                        ++line;
+                        pen = 0.0f;
                         previous = 0;
+                        lineHasContent = false;
+                        breakIndex = NO_BREAK;
+                        i = wrapStart;      // place the word again, now at the start of the new line
                         continue;
                     }
-                    pen += font.kern(previous, codepoint);
-                    penX[i] = pen;
-                    pen += font.glyph(codepoint).advance;
-                    lineWidth[line] = pen;
-                    previous = codepoint;
+
+                    penX[i] = start;
+                    pen = end;
+                    previous = tab ? 0 : codepoint;
+                    if(space){
+                        // spaces in front of the first visible glyph of a line are no break opportunity (the wrap would leave an empty line)
+                        if(lineHasContent) breakIndex = i + 1;
+                    } else {
+                        lineHasContent = true;
+                    }
+                    ++i;
+                }
+
+                // width of every line = right edge of its last visible glyph (trailing spaces do not count),
+                // this is what Center / Right alignment use
+                std::vector<float> lineWidth(size_t{line} + 1, 0.0f);
+                for(uint32_t g = 0; g < count; ++g){
+                    const uint32_t codepoint = codepoints[g];
+                    if(codepoint == '\n' || codepoint == '\r' || codepoint == '\t' || codepoint == ' ') continue;
+                    float& width = lineWidth[lineOf[g]];
+                    width = std::max(width, penX[g] + font.glyph(codepoint).advance);
                 }
 
                 // pass 2: the Font structs

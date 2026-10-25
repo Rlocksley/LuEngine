@@ -16,7 +16,7 @@
 //   App::registerFont       FreeType -> signed distance field atlas -> global texture array
 //   App::registerFontPipe   font_basic.vert/.frag, one indirect draw command per glyph
 //   Component::Transform2D  on the PARENT entity: position (pixels), positionZ (layer), rotation, scale
-//   Component::Text         on a CHILD of it: string, font, pipeline, color, size, alignment
+//   Component::Text         on a CHILD of it: string, font, pipeline, color, size, alignment, word wrapping (maxWidth)
 //   Component::Camera2D     optional, the default is "world pixel == screen pixel"
 //
 // The depth image is cleared before the text is drawn, so the text is always on top of the 3D cube
@@ -51,7 +51,7 @@ struct TextDemoModule {
     static flecs::entity createText(flecs::world& world, const char* name, const std::string& string,
                                     const Lu::Component::Transform2D& transform, const glm::vec4& color,
                                     float size, Lu::TextAlign align = Lu::TextAlign::Left,
-                                    float lineSpacing = 1.0f) {
+                                    float lineSpacing = 1.0f, float maxWidth = 0.0f) {
         const auto parent = world.entity(name).set<Lu::Component::Transform2D>(transform);
         return world.entity((std::string(name) + "::Text").c_str())
             .child_of(parent)
@@ -62,7 +62,8 @@ struct TextDemoModule {
                 .color = color,
                 .size = size,
                 .lineSpacing = lineSpacing,
-                .align = align
+                .align = align,
+                .maxWidth = maxWidth
             });
     }
 
@@ -154,6 +155,18 @@ struct TextDemoModule {
             Lu::TextAlign::Left, 
             1.3f
         );
+
+        // word wrapping: maxWidth = width of the paragraph box in pixels. The same text, left / centered / right aligned.
+        // For Center / Right the Transform2D position is the center / right edge of the box.
+        const std::string paragraph =
+            "Word wrapping breaks a line at the last space that fits into maxWidth. "
+            "Verylongwordsthatdonotfitintotheboxarebrokenbetweencharacters.\nAn explicit newline still works.";
+        createText(world, "WrapLeft", paragraph, {.position = {24.0f, 280.0f}, .positionZ = 10},
+                   glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 20.0f, Lu::TextAlign::Left, 1.0f, 300.0f);
+        createText(world, "WrapCenter", paragraph, {.position = {24.0f + 150.0f, 480.0f}, .positionZ = 10},
+                   glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 20.0f, Lu::TextAlign::Center, 1.0f, 300.0f);
+        createText(world, "WrapRight", paragraph, {.position = {24.0f + 300.0f, 680.0f}, .positionZ = 10},
+                   glm::vec4(0.7f, 1.0f, 0.7f, 1.0f), 20.0f, Lu::TextAlign::Right, 1.0f, 300.0f);
 
         // centered text that rotates and is scaled; the pivot of the rotation is the Transform2D position
         createText(

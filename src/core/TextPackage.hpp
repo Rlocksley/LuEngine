@@ -127,7 +127,8 @@ namespace Lu{
             void createText(const TextEntity entity, const Transform2DId transform2DId,
                             const FontId fontId, const FontPipeId pipeId,
                             const std::string& string, const glm::vec4& color,
-                            const float size, const float lineSpacing, const TextAlign align)
+                            const float size, const float lineSpacing, const TextAlign align,
+                            const float maxWidth)
             {
                 LU_ASSERT(pipeId < fonts.getPipeCount(), "TextPackage", "createText", "Invalid font pipeline.")
 
@@ -157,7 +158,7 @@ namespace Lu{
                 entityToRange[entity] = range;
 
                 const std::vector<Font> laidOut = layoutText(
-                    fonts.getFont(fontId), codepoints, transform2DId, pipeId, color, size, lineSpacing, align);
+                    fonts.getFont(fontId), codepoints, transform2DId, pipeId, color, size, lineSpacing, align, maxWidth);
                 for(uint32_t i = 0; i < count; ++i){
                     glyphs[range.offset + i] = laidOut[i];
                     dirty.mark(range.offset + i);

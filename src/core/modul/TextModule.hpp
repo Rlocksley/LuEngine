@@ -48,7 +48,7 @@ namespace Module {
                                 text.font.id() != 0 && text.pipeline.id() != 0) {
                                 requests.push_back(EcsRequest::CreateText{
                                     parent.id(), entity.id(), text.font.id(), text.pipeline.id(),
-                                    text.text, text.color, text.size, text.lineSpacing, text.align});
+                                    text.text, text.color, text.size, text.lineSpacing, text.align, text.maxWidth});
                             }
                             entity.remove<Component::TextGpuDirty>();
                         }

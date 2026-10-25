@@ -333,7 +333,8 @@ world.entity("LabelText").child_of(label).set(Lu::Component::Text{
     .pipeline = world.lookup("FontPipe::Basic"),
     .color = glm::vec4(1.f),
     .size = 32.f,                  // line height in pixels
-    .align = Lu::TextAlign::Left
+    .align = Lu::TextAlign::Left,
+    .maxWidth = 400.f              // optional word wrapping, 0 = off (see below)
 });
 // change the string later with .set<Lu::Component::Text>(...) or modified<>(): it is the same EcsRequest::CreateText
 ```
@@ -353,6 +354,12 @@ the `TextureId` of the atlas, the glyph rectangle, color, the parent's Transform
 `VkDrawIndirectCommand` (6 vertices, the glyph slot is passed in `firstVertex`), drawn with `vkCmdDrawIndirectCount` per font pipeline.
 Before the glyphs are drawn the depth image is cleared, so text never interferes with the 3D scene; glyphs of different `positionZ` layers
 are ordered by the depth test (fully transparent texels are discarded).
+
+**Word wrapping:** `Component::Text::maxWidth` (pixels, same unit as `size`, before the `Transform2D` scale) breaks a line at the last space
+or tab that still fits; the space stays at the end of the previous line and does not count towards its width, so `Center` / `Right` lines are
+aligned by their visible text. A word that is wider than `maxWidth` is broken between characters, and a line always keeps at least one
+character. `'\n'` still starts a new line, `maxWidth = 0` turns wrapping off. Wrapping does not change the number of glyphs of a text (it is
+still one `Font` struct per character), it only changes the glyph positions.
 
 `Camera2D` is optional (default: world pixel == screen pixel). `position` is the world point shown at `pivot` (fraction of the window,
 `(0.5, 0.5)` = center), `zoom` and `rotation` act around the pivot. `Component::Static` on an entity with a `Transform2D` skips the per-frame update.

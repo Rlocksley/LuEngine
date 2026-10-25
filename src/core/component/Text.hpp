@@ -26,6 +26,11 @@ namespace Lu{
             float size{32.f};               // height of one line of text in pixels
             float lineSpacing{1.f};         // multiplier of the font's line height
             TextAlign align{TextAlign::Left};
+            // Word wrapping: lines are broken at spaces so that no line is wider than maxWidth. Unit: pixels, like `size`
+            // (before the Transform2D scale is applied). A word that is wider than maxWidth is broken between characters.
+            // 0 = no wrapping, only '\n' starts a new line. Combine with `align` for left / centered / right aligned paragraphs
+            // (Center / Right anchor the lines at the Transform2D position, so for a centered box put it in the middle of the box).
+            float maxWidth{0.f};
         };
 
         struct TextGpuDirty{};
