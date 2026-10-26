@@ -79,6 +79,58 @@ namespace Lu{
         const std::vector<Vertex::Mesh>& getVertices() { return vertices; }
         const std::vector<uint32_t>& getIndices()      { return indices;  }
     };
+
+    // Pitched triangular-prism roof (ridge along Z axis at +halfSize.y, base at -halfSize.y).
+    struct GableRoof {
+        GableRoof(const glm::vec3 halfSize, const glm::vec3 offset = glm::vec3(0.0f), const glm::vec4 color = glm::vec4(1.0f));
+
+    private:
+        std::vector<Vertex::Mesh> vertices;
+        std::vector<uint32_t> indices;
+
+    public:
+        const std::vector<Vertex::Mesh>& getVertices() { return vertices; }
+        const std::vector<uint32_t>& getIndices()      { return indices;  }
+    };
+
+    // Four-sided pyramid / hip roof (apex at (0, +halfSize.y, 0), base at -halfSize.y).
+    struct Pyramid {
+        Pyramid(const glm::vec3 halfSize, const glm::vec3 offset = glm::vec3(0.0f), const glm::vec4 color = glm::vec4(1.0f));
+
+    private:
+        std::vector<Vertex::Mesh> vertices;
+        std::vector<uint32_t> indices;
+
+    public:
+        const std::vector<Vertex::Mesh>& getVertices() { return vertices; }
+        const std::vector<uint32_t>& getIndices()      { return indices;  }
+    };
+
+    // Vertical cylinder along Y axis spanning [-halfHeight, +halfHeight].
+    struct Cylinder {
+        Cylinder(float radius, float halfHeight, int segments = 24, const glm::vec3 offset = glm::vec3(0.0f), const glm::vec4 color = glm::vec4(1.0f));
+
+    private:
+        std::vector<Vertex::Mesh> vertices;
+        std::vector<uint32_t> indices;
+
+    public:
+        const std::vector<Vertex::Mesh>& getVertices() { return vertices; }
+        const std::vector<uint32_t>& getIndices()      { return indices;  }
+    };
+
+    // Vertical cone along Y axis with base at -halfHeight and apex at +halfHeight.
+    struct Cone {
+        Cone(float radius, float halfHeight, int segments = 24, const glm::vec3 offset = glm::vec3(0.0f), const glm::vec4 color = glm::vec4(1.0f));
+
+    private:
+        std::vector<Vertex::Mesh> vertices;
+        std::vector<uint32_t> indices;
+
+    public:
+        const std::vector<Vertex::Mesh>& getVertices() { return vertices; }
+        const std::vector<uint32_t>& getIndices()      { return indices;  }
+    };
     
     }
 }
