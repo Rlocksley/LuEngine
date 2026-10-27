@@ -25,13 +25,13 @@ using Lu::Component::MeshTransform;
 using Lu::Component::InputState;
 using Lu::Component::FlyingCamera;
 using Lu::Component::AnimationStateMachine;
-using Lca::Component::CharacterCapsule;
-using Lca::Component::PhysicsRay;
-using Lca::Component::PhysicsRayCast;
-using Lca::Component::PhysicsRayHit;
-using Lca::Component::RigidBodyDesc;
-using Lca::Component::ShapeKind;
-using Lca::Component::BodyKind;
+using Lu::Component::CharacterCapsule;
+using Lu::Component::PhysicsRay;
+using Lu::Component::PhysicsRayCast;
+using Lu::Component::PhysicsRayHit;
+using Lu::Component::RigidBodyDesc;
+using Lu::Component::ShapeKind;
+using Lu::Component::BodyKind;
 
 namespace {
 constexpr const char* kModel = "Adventurer14";
@@ -82,7 +82,7 @@ flecs::entity addCube(const flecs::world& world, const std::string& name,
         .set<Transform>(t)
         .set<RigidBodyDesc>({.shape = ShapeKind::Box, .kind = kind,
             .halfExtents = halfExtents, .mass = 1.0f, .friction = 0.8f,
-            .layer = Lca::Layers::STATIC_ENVIRONMENT})
+            .layer = Lu::Layers::STATIC_ENVIRONMENT})
         .add<Lu::Component::TransformGpu>();
     world.entity().set(flecs::Parent{body})
         .set<Lu::Component::Mesh>({.mesh = mesh, .pipeline = pipeline})
@@ -93,8 +93,8 @@ flecs::entity addCube(const flecs::world& world, const std::string& name,
 struct AdventurerCommandDemo {
     explicit AdventurerCommandDemo(flecs::world& world) {
         world.import<Lu::Module::FlyingCamera>();
-        world.import<Lca::Module::PhysicsModule>();
-        world.import<Lca::Module::CharacterCapsuleModule>();
+        world.import<Lu::Module::PhysicsModule>();
+        world.import<Lu::Module::CharacterCapsuleModule>();
 
         auto& library = Lu::Core::GetAnimationLibrary();
         library.createMaskFromNode("Adventurer14::UpperBody", kModel, kUpperBodyRoot);
@@ -126,7 +126,7 @@ struct AdventurerCommandDemo {
                         .maxRunSpeed = 4.5f,
                         .faceMoveDirection = true})
                     .set<MoveOrder>({})
-                    .add<Lca::Component::PhysicsFocus>();
+                    .add<Lu::Component::PhysicsFocus>();
                 adventurers.push_back(adventurer);
             }
         }

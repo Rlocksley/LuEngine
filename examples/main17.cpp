@@ -21,13 +21,13 @@
 using Lu::Component::InputState;
 using Lu::Component::Transform;
 using Lu::Component::FlyingCamera;
-using Lca::Component::BodyKind;
-using Lca::Component::PhysicsBody;
-using Lca::Component::PhysicsRay;
-using Lca::Component::PhysicsRayCast;
-using Lca::Component::PhysicsRayHit;
-using Lca::Component::RigidBodyDesc;
-using Lca::Component::ShapeKind;
+using Lu::Component::BodyKind;
+using Lu::Component::PhysicsBody;
+using Lu::Component::PhysicsRay;
+using Lu::Component::PhysicsRayCast;
+using Lu::Component::PhysicsRayHit;
+using Lu::Component::RigidBodyDesc;
+using Lu::Component::ShapeKind;
 
 namespace {
 
@@ -549,7 +549,7 @@ flecs::entity placeBuildingOrStreet(
             .halfExtents = bp.boundingHalfExtents,
             .friction    = 0.75f,
             .restitution = 0.10f,
-            .layer       = Lca::Layers::STATIC_ENVIRONMENT
+            .layer       = Lu::Layers::STATIC_ENVIRONMENT
         });
 
     PlacedObject placed{};
@@ -634,7 +634,7 @@ void collapsePlacedObjectIntoPhysicsShapes(
                 .mass           = 2.0f,
                 .friction       = 0.65f,
                 .restitution    = 0.25f,
-                .layer          = Lca::Layers::DYNAMIC_ENVIRONMENT,
+                .layer          = Lu::Layers::DYNAMIC_ENVIRONMENT,
                 .linearVelocity = initialVelocity
             })
             .add<Lu::Component::TransformGpu>();
@@ -657,7 +657,7 @@ void collapsePlacedObjectIntoPhysicsShapes(
 struct CityBuilderModule {
     explicit CityBuilderModule(flecs::world& world) {
         world.import<Lu::Module::FlyingCamera>();
-        world.import<Lca::Module::PhysicsModule>();
+        world.import<Lu::Module::PhysicsModule>();
 
         world.component<PlacedObject>();
         world.component<DebrisPiece>();
@@ -702,7 +702,7 @@ struct CityBuilderModule {
                 .halfExtents = glm::vec3(kFloorHalfWidth, kFloorHalfHeight, kFloorHalfWidth),
                 .friction    = 0.85f,
                 .restitution = 0.05f,
-                .layer       = Lca::Layers::STATIC_ENVIRONMENT
+                .layer       = Lu::Layers::STATIC_ENVIRONMENT
             })
             .add<Lu::Component::TransformGpu>();
 
@@ -985,17 +985,17 @@ struct CityBuilderModule {
                     bool intersectsPlaced = hitPlacedObject;
 
                     // Test 1: Jolt NarrowPhaseQuery::CollideShape with the ghost's surrounding JPH::BoxShape
-                    auto& physics = Lca::Core::GetPhysics();
+                    auto& physics = Lu::Core::GetPhysics();
                     if (physics.isInitialized() && state.floorEntity.has<PhysicsBody>()) {
                         const ::JPH::BodyID floorBodyId = componentRef(state.floorEntity.get<PhysicsBody>()).id;
                         const glm::vec3 inflatedHalf = ghostHalfExtents + glm::vec3(0.01f);
-                        ::JPH::BoxShape ghostJoltBox(Lca::Core::toJoltVec3(inflatedHalf));
+                        ::JPH::BoxShape ghostJoltBox(Lu::Core::toJoltVec3(inflatedHalf));
                         ::JPH::CollideShapeSettings settings;
                         ::JPH::AllHitCollisionCollector<::JPH::CollideShapeCollector> collector;
                         IgnoreFloorBodyFilter bodyFilter(floorBodyId);
 
                         const ::JPH::RMat44 comTransform = ::JPH::RMat44::sRotationTranslation(
-                            Lca::Core::toJoltQuat(state.ghostRotation),
+                            Lu::Core::toJoltQuat(state.ghostRotation),
                             ::JPH::RVec3(ghostBoxCenterGround.x, ghostBoxCenterGround.y, ghostBoxCenterGround.z));
 
                         physics.getPhysicsSystem().GetNarrowPhaseQuery().CollideShape(

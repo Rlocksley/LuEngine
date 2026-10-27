@@ -14,12 +14,12 @@
 using Lu::Component::InputState;
 using Lu::Component::Transform;
 using Lu::Component::FlyingCamera;
-using Lca::Component::BodyKind;
-using Lca::Component::PhysicsRay;
-using Lca::Component::PhysicsRayCast;
-using Lca::Component::PhysicsRayHit;
-using Lca::Component::RigidBodyDesc;
-using Lca::Component::ShapeKind;
+using Lu::Component::BodyKind;
+using Lu::Component::PhysicsRay;
+using Lu::Component::PhysicsRayCast;
+using Lu::Component::PhysicsRayHit;
+using Lu::Component::RigidBodyDesc;
+using Lu::Component::ShapeKind;
 
 namespace {
 constexpr float kCubeHalfExtent = 0.45f;
@@ -64,7 +64,7 @@ flecs::entity spawnCube(const flecs::world& world, const std::string& name,
             .friction = 0.72f,
             .restitution = 0.08f,
             .layer = kind == BodyKind::Static
-                ? Lca::Layers::STATIC_ENVIRONMENT : Lca::Layers::DYNAMIC_ENVIRONMENT
+                ? Lu::Layers::STATIC_ENVIRONMENT : Lu::Layers::DYNAMIC_ENVIRONMENT
         })
         .add<Lu::Component::TransformGpu>();
     world.entity().set(flecs::Parent{body})
@@ -89,7 +89,7 @@ flecs::entity addVisualCube(const flecs::world& world, const glm::vec3& position
 struct PhysicsCubeSculpture {
     explicit PhysicsCubeSculpture(flecs::world& world) {
         world.import<Lu::Module::FlyingCamera>();
-        world.import<Lca::Module::PhysicsModule>();
+        world.import<Lu::Module::PhysicsModule>();
 
         const auto cubeMesh = world.lookup("Mesh::SculptureCube");
         const auto solidPipeline = world.lookup("MeshPipe::SculptureCubes");

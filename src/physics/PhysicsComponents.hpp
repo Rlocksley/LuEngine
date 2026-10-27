@@ -9,7 +9,7 @@
 // Physics objects use Lu::Component::Transform for their world position and
 // rotation. RigidBodyDesc supplies the physics shape dimensions independently
 // of Transform::scale.
-namespace Lca::Component {
+namespace Lu::Component {
 
 // ---- body description (what YOU set) ---------------------------------------
 enum class ShapeKind : uint8_t { Box, Sphere, Capsule };
@@ -113,4 +113,4 @@ struct TerrainIndex {
 };
 inline TerrainIndex& GetTerrainIndex() { static TerrainIndex i; return i; }
 
-} // namespace Lca::Component
+} // namespace Lu::Component

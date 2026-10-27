@@ -25,21 +25,21 @@
 //  Transform.position is the position of the FEET, so a skeleton prefab parented to
 //  the entity needs no offset. Forward is +Z rotated by yaw around +Y.
 //
-//      world.import<Lca::Module::PhysicsModule>();
-//      world.import<Lca::Module::CharacterCapsuleModule>();
+//      world.import<Lu::Module::PhysicsModule>();
+//      world.import<Lu::Module::CharacterCapsuleModule>();
 //
 //      auto player = world.entity("Player")
 //          .is_a(world.lookup("Skeleton::Hero"))
 //          .set<Lu::Component::Transform>({glm::vec3(0, 2, 0), 0.f, glm::vec3(0,1,0), glm::vec3(1)})
-//          .set<Lca::Component::CharacterCapsule>({.radius = 0.35f, .halfHeight = 0.55f})
-//          .add<Lca::Component::PhysicsFocus>();
+//          .set<Lu::Component::CharacterCapsule>({.radius = 0.35f, .halfHeight = 0.55f})
+//          .add<Lu::Component::PhysicsFocus>();
 //
 //      // custom controller: any flecs system
-//      world.system<Lca::Component::CharacterCapsule, Lu::Component::AnimationStateMachine>()
+//      world.system<Lu::Component::CharacterCapsule, Lu::Component::AnimationStateMachine>()
 //          .with<Player>().kind(PrePhysics)...
 // ============================================================================
 
-namespace Lca::Component {
+namespace Lu::Component {
 
 struct CharacterCapsule {
     // ---- configuration (read when the character is created) -----------------------------
@@ -93,9 +93,9 @@ struct CharacterCapsule {
     bool hasTeleport{false};
 };
 
-} // namespace Lca::Component
+} // namespace Lu::Component
 
-namespace Lca::Module {
+namespace Lu::Module {
 
 struct CharacterCapsuleModule {
     CharacterCapsuleModule(flecs::world& world) {
@@ -136,7 +136,7 @@ struct CharacterCapsuleModule {
         // ---- simulate after the rigid body step ---------------------------------------------------------
         flecs::entity physicsStep = world.lookup("PhysicsStep");
         LU_ASSERT(physicsStep, "CharacterCapsuleModule", "CharacterCapsuleModule",
-            "Import Lca::Module::PhysicsModule before CharacterCapsuleModule.")
+            "Import Lu::Module::PhysicsModule before CharacterCapsuleModule.")
 
         world.system<CharacterCapsule, Lu::Component::Transform>("CharacterCapsuleUpdate")
             .kind(physicsStep)
@@ -214,4 +214,4 @@ struct CharacterCapsuleModule {
     }
 };
 
-} // namespace Lca::Module
+} // namespace Lu::Module

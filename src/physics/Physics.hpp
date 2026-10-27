@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Lca {
+namespace Lu {
 
 namespace Layers {
     static constexpr ::JPH::ObjectLayer STATIC_ENVIRONMENT  = 0;
@@ -274,4 +274,4 @@ inline Physics& GetPhysics() {
 }
 
 } // namespace Core
-} // namespace Lca
+} // namespace Lu

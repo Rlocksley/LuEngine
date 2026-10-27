@@ -25,7 +25,7 @@
 
 /*
  * ============================ USAGE ==========================================
- *   world.import<Lca::Module::PhysicsModule>();
+ *   world.import<Lu::Module::PhysicsModule>();
  *
  *   // player: the terrain around it is streamed into the physics world
  *   player.set<Lu::Component::Transform>({.position={...}}).add<PhysicsFocus>();
@@ -43,7 +43,7 @@
  *        .add<Loot>();
  *
  *   // terrain chunk (created inactive; the module activates it near a PhysicsFocus)
- *   Lca::Module::spawnTerrainChunk(world, {cx, cz}, heights, 65, 1.0f, 1.0f);
+ *   Lu::Module::spawnTerrainChunk(world, {cx, cz}, heights, 65, 1.0f, 1.0f);
  *
  *   // --- reacting to contacts, 100% ECS side ---
  *   world.system<>("PlayerPickups").with<Player>().each([](flecs::entity player) {
@@ -63,11 +63,11 @@
  * =============================================================================
  */
 
-namespace Lca::Module {
+namespace Lu::Module {
 
 namespace PhysicsDetail {
 
-using namespace Lca::Component;
+using namespace Lu::Component;
 
 // flecs 3.x get<T>() returns T*, flecs 4.x returns const T& -> normalise
 template <typename T> const T* asPtr(const T* p) { return p; }
@@ -493,4 +493,4 @@ struct PhysicsModule {
     }
 };
 
-} // namespace Lca::Module
+} // namespace Lu::Module

@@ -15,9 +15,9 @@
 using Lu::Component::Transform;
 using Lu::Component::InputState;
 using Lu::Component::FlyingCamera;
-using Lca::Component::BodyKind;
-using Lca::Component::RigidBodyDesc;
-using Lca::Component::ShapeKind;
+using Lu::Component::BodyKind;
+using Lu::Component::RigidBodyDesc;
+using Lu::Component::ShapeKind;
 
 constexpr int kCubeCount = 500;
 constexpr int kCubesPerSide = 10;
@@ -39,7 +39,7 @@ Lu::Component::Material makeMaterial(const glm::vec3& color) {
 
 flecs::entity spawnPhysicsCube(flecs::world world, const char* name,
     const glm::vec3& position, const glm::vec3& visualScale,
-    const glm::vec3& physicsHalfExtents, Lca::Component::BodyKind bodyKind,
+    const glm::vec3& physicsHalfExtents, Lu::Component::BodyKind bodyKind,
     const glm::vec3& color, const flecs::entity& cubeMesh,
     const flecs::entity& meshPipeline,
     const glm::vec3& initialVelocity = glm::vec3(0.0f)) {
@@ -58,8 +58,8 @@ flecs::entity spawnPhysicsCube(flecs::world world, const char* name,
             .friction = 0.72f,
             .restitution = 0.08f,
             .layer = bodyKind == BodyKind::Static
-                ? Lca::Layers::STATIC_ENVIRONMENT
-                : Lca::Layers::DYNAMIC_ENVIRONMENT,
+                ? Lu::Layers::STATIC_ENVIRONMENT
+                : Lu::Layers::DYNAMIC_ENVIRONMENT,
             .linearVelocity = initialVelocity
         })
         .add<Lu::Component::TransformGpu>();
@@ -75,7 +75,7 @@ flecs::entity spawnPhysicsCube(flecs::world world, const char* name,
 struct PhysicsCubeScene {
     explicit PhysicsCubeScene(flecs::world& world) {
         world.import<Lu::Module::FlyingCamera>();
-        world.import<Lca::Module::PhysicsModule>();
+        world.import<Lu::Module::PhysicsModule>();
 
         init_random();
 

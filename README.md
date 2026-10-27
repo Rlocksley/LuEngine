@@ -267,7 +267,7 @@ Lu::App("Character")
                                             glm::vec3(kMeshScale)))
         .set<AnimationStateMachine>(AnimationStateMachine::create("HeroGraph"))
         .set<CharacterCapsule>({.radius = 0.35f, .halfHeight = 0.55f})
-        .add<Lca::Component::PhysicsFocus>();
+        .add<Lu::Component::PhysicsFocus>();
 
 ```
 </details>

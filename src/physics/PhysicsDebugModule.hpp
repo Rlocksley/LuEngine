@@ -256,25 +256,25 @@ inline void spawnParts(flecs::entity owner, const Assets& assets, const PartSpec
     owner.set<PhysicsDebugHandle>(handle);
 }
 
-inline void spawnRigidBody(flecs::entity e, const Assets& assets, const Lca::Component::RigidBodyDesc& d) {
+inline void spawnRigidBody(flecs::entity e, const Assets& assets, const Lu::Component::RigidBodyDesc& d) {
     const auto& cfg = GetPhysicsDebugConfig();
-    glm::vec4 color = d.kind == Lca::Component::BodyKind::Static    ? cfg.staticColor
-                    : d.kind == Lca::Component::BodyKind::Kinematic ? cfg.kinematicColor
+    glm::vec4 color = d.kind == Lu::Component::BodyKind::Static    ? cfg.staticColor
+                    : d.kind == Lu::Component::BodyKind::Kinematic ? cfg.kinematicColor
                                                                     : cfg.dynamicColor;
     if (d.isSensor) color = cfg.sensorColor;
 
     switch (d.shape) {
-    case Lca::Component::ShapeKind::Box: {
+    case Lu::Component::ShapeKind::Box: {
         const PartSpec box{assets.box, glm::vec3(0.0f), d.halfExtents * 1.9f};
         spawnParts(e, assets, &box, 1, color);
         break;
     }
-    case Lca::Component::ShapeKind::Sphere: {
+    case Lu::Component::ShapeKind::Sphere: {
         const PartSpec sphere{assets.sphere, glm::vec3(0.0f), glm::vec3(d.halfExtents.x * 0.9f)};
         spawnParts(e, assets, &sphere, 1, color);
         break;
     }
-    case Lca::Component::ShapeKind::Capsule: {
+    case Lu::Component::ShapeKind::Capsule: {
         // RigidBodyDesc: x = radius, y = half height of the cylinder part (Jolt CapsuleShape, axis Y)
         const float r = d.halfExtents.x, h = d.halfExtents.y;
         const PartSpec parts[3] = {
@@ -288,7 +288,7 @@ inline void spawnRigidBody(flecs::entity e, const Assets& assets, const Lca::Com
     }
 }
 
-inline void spawnCharacter(flecs::entity e, const Assets& assets, const Lca::Component::CharacterCapsule& c) {
+inline void spawnCharacter(flecs::entity e, const Assets& assets, const Lu::Component::CharacterCapsule& c) {
     // Transform is at the feet; Jolt lifts the capsule by halfHeight + radius.
     const float lift = c.halfHeight + c.radius;
     const PartSpec parts[3] = {
@@ -307,12 +307,12 @@ struct PhysicsDebug {
     PhysicsDebug(flecs::world& world) {
         using namespace Lu::Component;
         using namespace PhysicsDebugDetail;
-        using Lca::Component::CharacterCapsule;
-        using Lca::Component::PhysicsBody;
-        using Lca::Component::RigidBodyDesc;
+        using Lu::Component::CharacterCapsule;
+        using Lu::Component::PhysicsBody;
+        using Lu::Component::RigidBodyDesc;
 
         // the observers below need the Jolt bodies / phases (no-op when it is already imported)
-        world.import<Lca::Module::PhysicsModule>();
+        world.import<Lu::Module::PhysicsModule>();
 
         world.component<PhysicsDebugPart>();
         world.component<PhysicsDebugHandle>();

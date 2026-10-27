@@ -22,7 +22,7 @@ using Lu::Component::Transform;
 using Lu::Component::MeshTransform;
 using Lu::Component::InputState;
 using Lu::Component::AnimationStateMachine;
-using Lca::Component::CharacterCapsule;
+using Lu::Component::CharacterCapsule;
 
 constexpr const char* kModel = "Wizard";
 constexpr const char* kModelFile = "asset\\adventurer\\Adventurer.gltf";
@@ -39,8 +39,8 @@ struct Hero {};
 struct CharacterDemo {
     explicit CharacterDemo(flecs::world& world) {
         world.import<Lu::Module::CharacterCamera>();
-        world.import<Lca::Module::PhysicsModule>();
-        world.import<Lca::Module::CharacterCapsuleModule>();
+        world.import<Lu::Module::PhysicsModule>();
+        world.import<Lu::Module::CharacterCapsuleModule>();
 
         // ---- animation graph: shared by every instance ------------------------------------------------
         auto& library = Lu::Core::GetAnimationLibrary();
@@ -70,7 +70,7 @@ struct CharacterDemo {
                                               glm::vec3(kMeshScale)))
             .set<AnimationStateMachine>(AnimationStateMachine::create("HeroGraph"))
             .set<CharacterCapsule>({.radius = 0.35f, .halfHeight = 0.55f})
-            .add<Lca::Component::PhysicsFocus>();
+            .add<Lu::Component::PhysicsFocus>();
 
         // ---- custom character controller ------------------------------------------------------------------
         // Plain system: read input, steer the capsule, feed the animation. Cache ids once.
@@ -117,11 +117,11 @@ struct CharacterDemo {
         floorTransform.scale = glm::vec3(60.0f, 1.0f, 60.0f);
         const flecs::entity floor = world.entity("Floor")
             .set<Transform>(floorTransform)
-            .set<Lca::Component::RigidBodyDesc>({
-                .shape = Lca::Component::ShapeKind::Box,
-                .kind = Lca::Component::BodyKind::Static,
+            .set<Lu::Component::RigidBodyDesc>({
+                .shape = Lu::Component::ShapeKind::Box,
+                .kind = Lu::Component::BodyKind::Static,
                 .halfExtents = glm::vec3(30.0f, 0.5f, 30.0f),
-                .layer = Lca::Layers::STATIC_ENVIRONMENT})
+                .layer = Lu::Layers::STATIC_ENVIRONMENT})
             .add<Lu::Component::TransformGpu>();
         world.entity().child_of(floor)
             .set<Lu::Component::Mesh>({.mesh = cube, .pipeline = pipe})

@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <thread>
 
-namespace Lca::Core {
+namespace Lu::Core {
 
 void Physics::init() {
     if (isInitialized()) return;
@@ -96,4 +96,4 @@ int Physics::step(float dt) {
     return steps;
 }
 
-} // namespace Lca::Core
+} // namespace Lu::Core
