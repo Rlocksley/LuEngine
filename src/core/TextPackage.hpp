@@ -145,7 +145,7 @@ namespace Lu{
                     range = it->second;
                     if(range.size != count){
                         // size changed: free the old n Font structs, allocate new ones
-                        releaseRange(range);
+                        if(range.size > 0) releaseRange(range);
                         range = Range{0, 0};
                     }
                 }
@@ -309,6 +309,7 @@ namespace Lu{
         private:
             // free a range and make every slot of it invalid (written to the GPU like any other dirty slot)
             void releaseRange(const Range range){
+                if(range.size == 0) return;
                 for(uint32_t i = 0; i < range.size; ++i){
                     glyphs[range.offset + i] = Font{};
                     dirty.mark(range.offset + i);

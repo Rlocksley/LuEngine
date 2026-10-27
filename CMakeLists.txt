@@ -42,10 +42,11 @@ find_package(Freetype REQUIRED)
 # --- Build Internal Libraries ---
 # Process the subdirectories to create our 'component_lib' and 'core_lib' targets.
 add_subdirectory(./src/core)
-#add_subdirectory(./src/component)
-add_subdirectory(./src/shape)
 add_subdirectory(./src/app)
 add_subdirectory(./src/physics)
+add_subdirectory(./src/component)
+add_subdirectory(./src/module)
+add_subdirectory(./src/shape)
 
 #add_subdirectory(./converter)
 #add_subdirectory(./analyzer)

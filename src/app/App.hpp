@@ -28,6 +28,20 @@ namespace Lu{
         disabled,
     };
 
+    struct CpuTexture {
+        std::string name{};
+        uint32_t width{0};
+        uint32_t height{0};
+        std::shared_ptr<uint8_t[]> pixels{nullptr};
+        VkFormat vkFormat{VK_FORMAT_R8G8B8A8_SRGB};
+
+        CpuTexture() = default;
+        CpuTexture(const std::string& name, uint32_t width, uint32_t height, std::shared_ptr<uint8_t[]> pixels, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB)
+            : name(name), width(width), height(height), pixels(std::move(pixels)), vkFormat(format) {}
+        CpuTexture(uint32_t width, uint32_t height, std::shared_ptr<uint8_t[]> pixels, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB)
+            : width(width), height(height), pixels(std::move(pixels)), vkFormat(format) {}
+    };
+
     class App{
         Core::Renderer* renderer;
         flecs::world* world;
@@ -178,6 +192,42 @@ namespace Lu{
             renderer->createTexture(world->entity(name.c_str()).id(), filePath);
 
             return *this;
+        }
+
+        App& registerTexture(CpuTexture&& cpuTexture){
+            LU_ASSERT(cpuTexture.name.size() > 0, "App", "registerTexture", "CpuTexture.name must be size bigger zer");
+            LU_ASSERT(!world->lookup(cpuTexture.name.c_str()), "App", "registerTexture", "Entity with name: " + cpuTexture.name + " already exists");
+
+            Core::TextureCpu tex(cpuTexture.width, cpuTexture.height, std::move(cpuTexture.pixels));
+            tex.vkFormat = cpuTexture.vkFormat;
+            renderer->createTexture(world->entity(cpuTexture.name.c_str()).id(), std::move(tex));
+
+            return *this;
+        }
+
+        App& registerTexture(const CpuTexture& cpuTexture){
+            LU_ASSERT(cpuTexture.name.size() > 0, "App", "registerTexture", "CpuTexture.name must be size bigger zer");
+            LU_ASSERT(!world->lookup(cpuTexture.name.c_str()), "App", "registerTexture", "Entity with name: " + cpuTexture.name + " already exists");
+
+            Core::TextureCpu tex(cpuTexture.width, cpuTexture.height, cpuTexture.pixels);
+            tex.vkFormat = cpuTexture.vkFormat;
+            renderer->createTexture(world->entity(cpuTexture.name.c_str()).id(), std::move(tex));
+
+            return *this;
+        }
+
+        App& registerTexture(const std::string& name, Core::TextureCpu&& cpuTexture){
+            LU_ASSERT(name.size() > 0, "App", "registerTexture", "name must be size bigger zer");
+            LU_ASSERT(!world->lookup(name.c_str()), "App", "registerTexture", "Entity with name: " + name + " already exists");
+
+            renderer->createTexture(world->entity(name.c_str()).id(), std::move(cpuTexture));
+
+            return *this;
+        }
+
+        App& registerTexture(const std::string& name, CpuTexture&& cpuTexture){
+            cpuTexture.name = name;
+            return registerTexture(std::move(cpuTexture));
         }
 
         App& loadModel(const std::string& name, const std::string& filePath,
