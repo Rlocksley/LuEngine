@@ -65,9 +65,9 @@ namespace Lu {
                 // =========================================================================
                 // 1. Button Interaction System
                 // =========================================================================
-                world.system<Lu::UI::Button, const Lu::Component::Transform2D, const Component::InputState>("UIButtonSystem")
+                world.system<Lu::UI::Button, const Lu::Component::WorldTransform2D, const Component::InputState>("UIButtonSystem")
                     .kind(flecs::PreUpdate)
-                    .each([](flecs::iter& it, size_t index, Lu::UI::Button& button, const Lu::Component::Transform2D& transform, const Component::InputState& input) {
+                    .each([](flecs::iter& it, size_t index, Lu::UI::Button& button, const Lu::Component::WorldTransform2D& transform, const Component::InputState& input) {
                         flecs::entity e = it.entity(index);
 
                         // Reset per-frame single pulse flags
@@ -183,9 +183,9 @@ namespace Lu {
                 // =========================================================================
                 // 2. TextInput Interaction & Typing System
                 // =========================================================================
-                world.system<Lu::UI::TextInput, const Lu::Component::Transform2D, const Component::InputState>("UITextInputSystem")
+                world.system<Lu::UI::TextInput, const Lu::Component::WorldTransform2D, const Component::InputState>("UITextInputSystem")
                     .kind(flecs::PreUpdate)
-                    .each([](flecs::iter& it, size_t index, Lu::UI::TextInput& field, const Lu::Component::Transform2D& transform, const Component::InputState& input) {
+                    .each([](flecs::iter& it, size_t index, Lu::UI::TextInput& field, const Lu::Component::WorldTransform2D& transform, const Component::InputState& input) {
                         flecs::entity e = it.entity(index);
                         const float dt = it.delta_time();
 

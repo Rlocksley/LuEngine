@@ -290,6 +290,7 @@ namespace Lu{
             world->import<Module::Light>();
             world->import<Module::InputState>();
             // 2D: Transform2D before Text, so the Transform2D slot exists on the renderer side before CreateText arrives
+            world->import<Module::Transform2D>();
             world->import<Module::Transform2DGpu>();
             world->import<Module::Camera2D>();
             world->import<Module::Text>();

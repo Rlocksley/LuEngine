@@ -2,10 +2,11 @@
 
 #include "Global.hpp"
 #include "flecs.h"
+#include "Static.hpp"
+#include "TransformHierarchy.hpp"
 
 namespace Lu {
     namespace Component {
-        struct Static{}; // used for should be updated each frame or not information
 
         struct Transform {
             glm::vec3 position{0.0f, 0.0f, 0.0f};
@@ -40,6 +41,23 @@ namespace Lu {
             }
         };
 
+        // The WORLD transform of an entity. Maintained automatically for every entity that has a Transform:
+        //
+        //      WorldTransform = WorldTransform of the nearest ancestor with a Transform * Transform
+        //
+        // (= Transform if there is no such ancestor). Adding / setting / removing a Transform, re-parenting an entity
+        // (or a whole subtree) and the per-frame propagation system (non-Static entities) keep it up to date. This is the
+        // transform the renderer gets (EcsRequest::CreateTransform / UpdateTransform). Read it, but do not set it.
+        struct WorldTransform : Transform {
+            using Transform::Transform;
+            WorldTransform() = default;
+            WorldTransform(const Transform& other) : Transform(other) {}
+        };
+
+        inline WorldTransform composeWorld(const WorldTransform& parentWorld, const Transform& local) {
+            return WorldTransform(parentWorld.Transform::operator*(local));
+        }
+
         // Transform of the visual part (Mesh / SkeletonMesh children) of an entity, LOCAL to the
         // entity's Transform:  world = Transform * MeshTransform * (skinning) * vertex.
         //
@@ -57,10 +75,11 @@ namespace Lu {
 
     namespace Module{
         struct Transform{
+            // Transform = the transform the API user sets: LOCAL to the parent entity if that (or an ancestor) has a
+            // Transform, WORLD if there is none. WorldTransform is added / updated / removed automatically.
             Transform(flecs::world& world){
-                world.component<Component::Transform>();
                 world.component<Component::MeshTransform>();
-
+                Component::Detail::TransformHierarchy<Component::Transform, Component::WorldTransform>::install(world);
             }
         };
     }

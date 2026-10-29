@@ -273,6 +273,24 @@ Lu::App("Character")
 </details>
 
 <details>
+<summary>Transform hierarchies (Transform / WorldTransform)</summary>
+
+`Transform` (and `Transform2D`) is what you set. If the entity has an ancestor with a `Transform` it is **local** to it, otherwise it is the **world** transform. The engine adds and maintains a `WorldTransform` (`WorldTransform2D`) automatically:
+
+```
+WorldTransform = WorldTransform of the nearest ancestor with a Transform * Transform
+```
+
+* Adding, setting or removing a `Transform`, and (re)parenting an entity or a whole subtree, update the `WorldTransform` of the entity and of every descendant with a `Transform` (entities in between without a `Transform` are transparent). The order in which you create entities, add `Transform`s or set parents does not matter.
+* Removing the `Transform` removes the `WorldTransform`.
+* Entities without `Static` are recomputed every frame (parents first), so it is fine to write `Transform` directly, e.g. from physics, without calling `modified`.
+* `Static` only means "not streamed every frame": setting the `Transform` of a `Static` entity again still updates its `WorldTransform` and those of its children (sent once to the renderer). A `Static` entity can be the parent of non-`Static` entities. A `Static` child does not follow a moving parent until its own or an ancestor's `Transform` is set again.
+* The renderer receives the `WorldTransform` (`EcsRequest::CreateTransform / UpdateTransform`). Read `WorldTransform`, do not set it.
+* `Transform2D::positionZ` (layer) is added up along the hierarchy.
+
+</details>
+
+<details>
 <summary>6. Writing Your Own Shaders</summary>
 
 The engine expects shader interfaces to match the descriptor set layouts created by its packages.\

@@ -17,12 +17,12 @@ namespace Lu{
     namespace EcsRequest{
         struct CreateTransform{
             flecs::entity_t entity;            
-            Component::Transform transform;
+            Component::WorldTransform transform;
         };
 
         struct UpdateTransform{
             flecs::entity_t entity;            
-            Component::Transform transform;
+            Component::WorldTransform transform;
         };
 
         struct DestroyTransform{
@@ -111,12 +111,12 @@ namespace Lu{
         // Transform2D triple buffer (TripleBuffers.hpp); it is also accepted through the channel.
         struct CreateTransform2D{
             flecs::entity_t entity;
-            Component::Transform2D transform;
+            Component::WorldTransform2D transform;
         };
 
         struct UpdateTransform2D{
             flecs::entity_t entity;
-            Component::Transform2D transform;
+            Component::WorldTransform2D transform;
         };
 
         struct DestroyTransform2D{

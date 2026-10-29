@@ -12,21 +12,22 @@ namespace Module {
             TransformGpu(flecs::world& world){
                 world.component<Component::TransformGpu>();
 
-                world.observer<const Component::Transform>()
+                // The renderer mirrors the WorldTransform (computed from Transform and the parents' transforms, see Module::Transform).
+                world.observer<const Component::WorldTransform>()
                     .with<Component::TransformGpu>()
                     .event(flecs::OnAdd)
                     .event(flecs::OnSet)
-                    .each([](flecs::entity entity, const Component::Transform& transform){
+                    .each([](flecs::entity entity, const Component::WorldTransform& transform){
                         entity.add<Component::TransformGpuDirty>();
                     });
 
-                world.system<Component::Transform>("EcsRequest::CreateTransform System")
+                world.system<const Component::WorldTransform>("EcsRequest::CreateTransform System")
                 .with<Component::TransformGpuDirty>()
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> transformBuffer;
                     
                     while (it.next()) {
-                        auto transforms = it.field<const Component::Transform>(0);
+                        auto transforms = it.field<const Component::WorldTransform>(0);
                         for (int i = 0; i < it.count(); ++i) {
                             auto entity = it.entity(i);
                             transformBuffer.push_back(EcsRequest::CreateTransform{ entity, transforms[i]});
@@ -39,10 +40,10 @@ namespace Module {
             
 
 
-                world.observer<const Component::Transform>()
+                world.observer<const Component::WorldTransform>()
                     .with<Component::TransformGpu>()
                     .event(flecs::OnRemove)
-                    .each([](flecs::entity entity, const Component::Transform& transform){
+                    .each([](flecs::entity entity, const Component::WorldTransform& transform){
                         GetChannel().send(EcsRequest::DestroyTransform{entity.id()});
                     });
 
@@ -98,15 +99,17 @@ namespace Module {
                         });
                 });
 
-                world.system<const Component::Transform>()
+                // PostUpdate: after the propagation system of Module::Transform wrote this frame's WorldTransforms
+                world.system<const Component::WorldTransform>()
                 .with<Component::TransformGpu>()
                 .without<Component::Static>()
+                .kind(flecs::PostUpdate)
                 .run([](flecs::iter it){
                     Core::GetTransformTripleBuffer().write(
                         [&](std::vector<EcsRequest::UpdateTransform>& transformBuffer){
                             transformBuffer.clear();
                             while (it.next()) {
-                                    auto transforms = it.field<const Component::Transform>(0);
+                                    auto transforms = it.field<const Component::WorldTransform>(0);
                                     for (int i = 0; i < it.count(); ++i) {
                                         transformBuffer.push_back(EcsRequest::UpdateTransform{ it.entity(i), transforms[i]});
                                     }

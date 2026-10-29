@@ -28,11 +28,11 @@
 //          .importModule<Lu::Module::PhysicsDebug>()     // <- the only line you need
 //          .run();
 //
-//  Every entity that owns a Jolt shape gets an additional child entity per visual part:
+//  Every entity that owns a Jolt shape gets an additional debug root (+ one Mesh child) per visual part:
 //
 //      physics entity   Transform (+ RigidBodyDesc / CharacterCapsule)      <- Jolt writes this
-//        '- debug root  Transform + TransformGpu + PhysicsDebugPart         <- copy of the physics Transform
-//             '- debug  Mesh + Material (wireframe line pipeline)            <- Transform parent = debug root
+//      debug root       Transform + TransformGpu + PhysicsDebugPart         <- WORLD transform of the Jolt shape (own root)
+//        '- debug       Mesh + Material (wireframe line pipeline)           <- Transform parent = debug root
 //
 //  The debug root follows the physics entity every frame (PostPhysics phase) and is destroyed
 //  together with it / when its Jolt shape disappears. Why a root with an own Transform instead of
@@ -238,9 +238,10 @@ inline void spawnParts(flecs::entity owner, const Assets& assets, const PartSpec
         t.rotation = ownerTransform.rotation;
         t.scale = specs[i].scale;
 
-        // debug root: Transform parent of the Mesh, has the transform of the Jolt shape
+        // debug root: Transform parent of the Mesh, has the (WORLD) transform of the Jolt shape.
+        // It must NOT be a child of the owner: a child's Transform is local to its parent's Transform, but
+        // `t` already is the world transform of the shape. The root is destroyed through PhysicsDebugHandle.
         flecs::entity root = world.entity()
-            .set(flecs::Parent{owner})
             .set<Transform>(t)
             .add<TransformGpu>()
             .set<PhysicsDebugPart>({owner, specs[i].offset, specs[i].scale});
