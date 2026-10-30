@@ -273,6 +273,40 @@ Lu::App("Character")
 </details>
 
 <details>
+<summary>UI: windows, sliders, tabs ... as entity hierarchies</summary>
+
+The UI module (`importModule<Lu::Module::UI>()`, see `examples/main_ui.cpp`) has **no factory functions**. A widget is an entity with a `Transform2D` (local to the parent widget, origin = top-left corner), a `Node` (size, layout hints) and a widget component. The module observes the widget component and creates the entities that draw it (`Transform2D` + `Mesh2D` / `Text` rectangles, knobs, texts) and the child widgets it consists of (close button of a `Window`, tabs of a `TabView`, options of a `Dropdown`, scroll bar of a `ScrollView`).
+
+```cpp
+using namespace Lu::UI;
+auto window = world.entity("Settings")
+    .set<Lu::Component::Transform2D>({.position = {100, 80}})
+    .set<Node>({.size = {360, 240}})
+    .set<Window>({.title = "Settings"});
+
+world.entity("Volume").child_of(window)
+    .set<Lu::Component::Transform2D>({.position = {20, 60}})   // relative to the window
+    .set<Node>({.size = {240, 24}})
+    .set<Slider>({.value = 0.7f, .onChange = [](flecs::entity, float v) { /* ... */ }});
+```
+
+| Widget components | |
+|---|---|
+| `Panel`, `Label`, `Image`, `ProgressBar` | display |
+| `Button`, `Toggle` (check box / radio group), `Slider`, `TextInput`, `Dropdown` | input |
+| `Window` (title bar, drag, close, raise on click), `TabView` + `TabPage`, `ScrollView` | containers |
+| `Layout` (horizontal / vertical / grid, auto size, grow) | on any node: places the child nodes |
+| `Style` | theme for the entity and everything below it |
+| `Interact`, `Draggable`, `Tooltip`, `Modal`, `Hidden` | add to any node |
+
+* Changing a widget component (`set`, or `get_mut` + `modified`) redraws it. The widgets that need several entities create them in an observer-triggered pass of the UI module (phase `UISync`), widgets inside widgets are created one frame later each.
+* Everything uses the `Transform2D` hierarchy: moving, hiding (`Hidden`) or destroying a widget moves / hides / destroys everything below it. Layers (`positionZ`) are derived from `Node::layer` (a child sits above its parent), the top-most node under the cursor gets the mouse (`Lu::UI::Pointer::of(world).overUI` tells you whether the mouse is over the UI).
+* Needed assets: `Mesh2D::UIRect` / `Mesh2D::UICircle` (unit shapes spanning (0,0)..(1,1)), `Mesh2DPipe::Basic`, `Font::Main`, `FontPipe::Basic` (names can be changed in `Style`).
+* There is no GPU clipping: children of a `ScrollView` that are not completely inside get the `Clipped` tag and are not drawn.
+
+</details>
+
+<details>
 <summary>Transform hierarchies (Transform / WorldTransform)</summary>
 
 `Transform` (and `Transform2D`) is what you set. If the entity has an ancestor with a `Transform` it is **local** to it, otherwise it is the **world** transform. The engine adds and maintains a `WorldTransform` (`WorldTransform2D`) automatically:

@@ -5,6 +5,10 @@ project(LCA)
 add_library(lu_module STATIC
 Module.cpp
 UIModule.hpp
+UIDetail.hpp
+UICoreModule.hpp
+UIBasicWidgets.hpp
+UIContainerWidgets.hpp
 )
 
 target_include_directories(lu_module PUBLIC ../core ../component)

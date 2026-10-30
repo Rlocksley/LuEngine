@@ -4,8 +4,16 @@ project(LCA)
 
 add_library(lu_component STATIC
 Component.cpp
+UICore.hpp
+UIDisplay.hpp
+UIWindow.hpp
 Button.hpp
+Toggle.hpp
+Slider.hpp
 TextInput.hpp
+Dropdown.hpp
+ScrollView.hpp
+TabView.hpp
 FlyingCamera.hpp
 CharacterCamera.hpp
 )
