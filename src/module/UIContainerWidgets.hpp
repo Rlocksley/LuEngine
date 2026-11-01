@@ -156,6 +156,33 @@ namespace Lu {
                 bool created = false;
                 const float viewport = c.size.y;
                 const float maxScroll = std::max(0.0f, view.contentHeight - viewport);
+
+                // ---- the clip rectangle: an entity with a Transform2D (+ Transform2DGpu) that is exactly the viewport. Mesh2D / Text
+                // below this view refer to it (Mesh2D::clip / Text::clip), the clipping shaders cut at its edges.
+                flecs::entity_t& clipId = c.parts.child[static_cast<size_t>(Child::ScrollClip)];
+                if (view.clip && canClip(c.style)) {
+                    Transform2D want;
+                    want.position = {0.0f, 0.0f};
+                    want.scale = c.size;
+                    want.positionZ = 0;
+                    if (!alive(c.w, clipId)) {
+                        flecs::entity clip = c.w.entity().child_of(c.e).set<Transform2D>(want);
+                        if (c.visible) clip.add<Transform2DGpu>();
+                        clipId = clip.id();
+                        c.partsChanged = true;     // (the layout pass redraws the children once the clip is ready: UILayout)
+                    } else {
+                        flecs::entity clip = c.w.entity(clipId);
+                        const Transform2D* have = clip.try_get<Transform2D>();
+                        if (!have || !same(*have, want)) clip.set<Transform2D>(want);
+                        Ctx::setVisible(clip, c.visible);
+                    }
+                } else if (clipId != 0) {
+                    if (alive(c.w, clipId)) c.w.entity(clipId).destruct();
+                    clipId = 0;
+                    c.partsChanged = true;
+                }
+
+                // ---- the scroll bar: a ScrollBar widget (child). The thumb size depends on how much of the content is visible.
                 if (view.scrollbar) {
                     flecs::entity bar = c.ownedChild(Child::ScrollBar, created);
                     Node node;
@@ -163,28 +190,30 @@ namespace Lu {
                     node.layer = 24;
                     node.inLayout = false;
                     const glm::vec2 pos(c.size.x - view.scrollbarWidth, 0.0f);
-                    Slider slider;
-                    slider.orientation = Orientation::Vertical;
-                    slider.value = maxScroll > 0.0f ? std::clamp(view.scroll / maxScroll, 0.0f, 1.0f) : 0.0f;
-                    slider.knobSize = view.scrollbarWidth;
-                    slider.trackThickness = std::max(4.0f, view.scrollbarWidth * 0.4f);
-                    slider.onChange = [](flecs::entity self, float v) {
-                        flecs::entity owner = self.parent();
-                        if (!owner.id() || !owner.has<ScrollView>() || !owner.has<Node>()) return;
-                        ScrollView sv = owner.get<ScrollView>();
-                        const float maxS = std::max(0.0f, sv.contentHeight - owner.get<Node>().size.y);
-                        sv.scroll = v * maxS;
-                        owner.set<ScrollView>(sv);
-                    };
+                    const float position = maxScroll > 0.0f ? std::clamp(view.scroll / maxScroll, 0.0f, 1.0f) : 0.0f;
+                    const float ratio = view.contentHeight > 0.0f ? std::clamp(viewport / view.contentHeight, 0.0f, 1.0f) : 1.0f;
                     if (created) {
                         Transform2D t; t.position = pos;
-                        bar.set<Transform2D>(t).set<Node>(node).set<Slider>(slider);
+                        ScrollBar sb;
+                        sb.position = position;
+                        sb.thumbRatio = ratio;
+                        sb.onChange = [](flecs::entity self, float v) {
+                            flecs::entity owner = self.parent();
+                            if (!owner.id() || !owner.has<ScrollView>() || !owner.has<Node>()) return;
+                            ScrollView sv = owner.get<ScrollView>();
+                            const float maxS = std::max(0.0f, sv.contentHeight - owner.get<Node>().size.y);
+                            sv.scroll = v * maxS;
+                            owner.set<ScrollView>(sv);
+                        };
+                        bar.set<Transform2D>(t).set<Node>(node).set<ScrollBar>(sb);
                     } else {
                         placeChild(bar, pos, node);
-                        const Slider* have = bar.try_get<Slider>();
-                        if (!have || std::abs(have->value - slider.value) > 1e-4f || have->knobSize != slider.knobSize) {
-                            slider.onChange = have ? have->onChange : slider.onChange;
-                            bar.set<Slider>(slider);
+                        const ScrollBar* have = bar.try_get<ScrollBar>();
+                        if (!have || std::abs(have->position - position) > 1e-5f || std::abs(have->thumbRatio - ratio) > 1e-5f) {
+                            ScrollBar sb = have ? *have : ScrollBar{};
+                            sb.position = position;
+                            sb.thumbRatio = ratio;
+                            bar.set<ScrollBar>(sb);
                         }
                     }
                     if (maxScroll <= 0.0f) { if (!bar.has<Hidden>()) bar.add<Hidden>(); }

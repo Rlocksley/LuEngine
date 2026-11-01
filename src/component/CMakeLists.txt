@@ -13,6 +13,7 @@ Slider.hpp
 TextInput.hpp
 Dropdown.hpp
 ScrollView.hpp
+ScrollBar.hpp
 TabView.hpp
 FlyingCamera.hpp
 CharacterCamera.hpp

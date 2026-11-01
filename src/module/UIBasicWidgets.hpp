@@ -138,6 +138,45 @@ namespace Lu {
                 }
             }
 
+            // ---- ScrollBar --------------------------------------------------------------------------------------------
+            struct ScrollBarMetrics {
+                float trackStart;     // pixels along the bar where the track (inside the padding) starts
+                float trackLength;
+                float thumbLength;    // does not depend on the position
+                float thumbStart;     // start of the thumb along the bar
+            };
+
+            inline ScrollBarMetrics scrollBarMetrics(const ScrollBar& bar, glm::vec2 size) {
+                const float along = bar.orientation == Orientation::Vertical ? size.y : size.x;
+                ScrollBarMetrics m;
+                m.trackStart = bar.padding;
+                m.trackLength = std::max(0.0f, along - bar.padding * 2.0f);
+                m.thumbLength = std::clamp(bar.thumbRatio, 0.0f, 1.0f) * m.trackLength;
+                m.thumbLength = std::max(m.thumbLength, std::min(bar.minThumbLength, m.trackLength));
+                m.thumbLength = std::min(m.thumbLength, m.trackLength);
+                const float range = m.trackLength - m.thumbLength;
+                m.thumbStart = m.trackStart + std::clamp(bar.position, 0.0f, 1.0f) * range;   // 1 = all the way at the end
+                return m;
+            }
+
+            inline void syncScrollBar(Ctx& c, const ScrollBar& bar) {
+                const bool vertical = bar.orientation == Orientation::Vertical;
+                c.defaultSize(vertical ? glm::vec2(14.0f, 200.0f) : glm::vec2(200.0f, 14.0f));
+                const Interact in = interactOf(c.e);
+                const ScrollBarMetrics m = scrollBarMetrics(bar, c.size);
+                const float thickness = (vertical ? c.size.x : c.size.y) - bar.padding * 2.0f;
+                const Color thumb = (in.enabled && (in.pressed || in.hovered)) ? c.style.accent : pick(bar.thumbColor, c.style.knob);
+
+                c.roundedRect(Slot::BarTrack0, {0.0f, 0.0f}, c.size, 0, bar.radius + bar.padding, pick(bar.trackColor, c.style.track));
+                if (thickness > 0.0f && m.thumbLength > 0.0f) {
+                    const glm::vec2 position = vertical ? glm::vec2(bar.padding, m.thumbStart) : glm::vec2(m.thumbStart, bar.padding);
+                    const glm::vec2 size = vertical ? glm::vec2(thickness, m.thumbLength) : glm::vec2(m.thumbLength, thickness);
+                    c.roundedRect(Slot::BarThumb0, position, size, 2, bar.radius, thumb);
+                } else {
+                    for (int i = 0; i < 7; ++i) c.hide(static_cast<Slot>(static_cast<int>(Slot::BarThumb0) + i));
+                }
+            }
+
             // ---- TextInput ------------------------------------------------------------------------------------------
             inline std::string displayText(const TextInput& t, float maxVisible) {
                 std::string shown = t.password ? std::string(t.text.size(), '*') : t.text;
@@ -213,6 +252,7 @@ namespace Lu {
                 watchWidget<Toggle>(world, true);
                 watchWidget<Slider>(world, true);
                 watchWidget<TextInput>(world, true, true);
+                watchWidget<ScrollBar>(world, true);
 
                 // ---- Button: click callback -----------------------------------------------------------------------------
                 world.system<const Button, const Interact>("UIButton")
@@ -260,6 +300,27 @@ namespace Lu {
                         slider.value = v;
                         e.modified<Slider>();
                         if (slider.onChange) slider.onChange(e, v);
+                    });
+
+                // ---- ScrollBar: drag the thumb, click / drag on the track ----------------------------------------------------
+                world.system<ScrollBar, const Interact, const Node>("UIScrollBar")
+                    .kind(phases.input)
+                    .each([](flecs::entity e, ScrollBar& bar, const Interact& in, const Node& node) {
+                        if (!in.pressed || !in.enabled || node.size.x <= 0.0f || node.size.y <= 0.0f) return;
+                        const ScrollBarMetrics m = scrollBarMetrics(bar, node.size);
+                        const float range = m.trackLength - m.thumbLength;
+                        const float along = bar.orientation == Orientation::Vertical ? in.cursor.y : in.cursor.x;
+                        if (in.justPressed) {
+                            // on the thumb: keep the point that was grabbed; on the track: the thumb jumps to the cursor
+                            const bool onThumb = along >= m.thumbStart && along <= m.thumbStart + m.thumbLength;
+                            bar.grab = onThumb ? along - m.thumbStart : m.thumbLength * 0.5f;
+                        }
+                        if (range <= 0.0f) return;
+                        const float position = std::clamp((along - bar.grab - m.trackStart) / range, 0.0f, 1.0f);
+                        if (std::abs(position - bar.position) < 1e-6f) { if (in.justPressed) e.modified<ScrollBar>(); return; }
+                        bar.position = position;
+                        e.modified<ScrollBar>();
+                        if (bar.onChange) bar.onChange(e, position);
                     });
 
                 // ---- TextInput: focus, typing, caret ------------------------------------------------------------------

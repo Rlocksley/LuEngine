@@ -178,7 +178,8 @@ namespace Lu{
             void createMesh2D(const Mesh2DEntity entity, const Mesh2DPipeEntity pipeEntity,
                               const Transform2DId transform2DId, const GeometryInfoId meshInfoId,
                               const uint32_t textureId, const glm::vec4& color,
-                              const glm::vec4& uvRect, const glm::vec4& params) {
+                              const glm::vec4& uvRect, const glm::vec4& params,
+                              const uint32_t clipTransform2DId = UINT32_MAX) {
                 const Mesh2DPipeId pipeId = getMesh2DPipeId(pipeEntity);
 
                 Mesh2DId id;
@@ -190,7 +191,7 @@ namespace Lu{
                 } else {
                     id = it->second;
                 }
-                meshes[id] = Mesh2D(color, uvRect, params, textureId, transform2DId, pipeId, meshInfoId);
+                meshes[id] = Mesh2D(color, uvRect, params, textureId, transform2DId, pipeId, meshInfoId, clipTransform2DId);
                 dirty.mark(id);
             }
 

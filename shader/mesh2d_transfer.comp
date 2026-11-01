@@ -10,7 +10,7 @@ struct Mesh2D{
     uint pipelineId;
     uint meshInfoId;
     uint valid;
-    uint pad0;
+    uint clipTransform2DId;   // 0xFFFFFFFF = no clip rectangle
     uint pad1;
     uint pad2;
 };

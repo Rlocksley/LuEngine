@@ -23,7 +23,7 @@ namespace Lu{
             uint32_t glyphIndex{0};          // index of this glyph in its text (for per-glyph effects in shaders)
             uint32_t glyphCount{0};          // number of glyphs of the text
             float sdf{0.0f};                 // 1 = atlas holds a signed distance field, 0 = coverage
-            uint32_t _pad0{0};
+            uint32_t clipTransform2DId{UINT32_MAX};   // slot of the Transform2D that is the clip rectangle, UINT32_MAX = none
         };
 
         struct FontInstance{

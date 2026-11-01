@@ -136,6 +136,7 @@ namespace Lu{
             float lineSpacing;
             TextAlign align;
             float maxWidth;             // 0 = no word wrapping
+            flecs::entity_t clip;       // entity with the Transform2D that is the clip rectangle, 0 = none
         };
 
         struct DestroyText{
@@ -152,6 +153,7 @@ namespace Lu{
             glm::vec4 color;
             glm::vec4 uvRect;
             glm::vec4 params;
+            flecs::entity_t clip;       // entity with the Transform2D that is the clip rectangle, 0 = none
         };
 
         struct DestroyMesh2D{

@@ -48,6 +48,7 @@ namespace Lu {
                         if (const Button* w = e.try_get<Button>()) syncButton(c, *w);
                         if (const Toggle* w = e.try_get<Toggle>()) syncToggle(c, *w);
                         if (const Slider* w = e.try_get<Slider>()) syncSlider(c, *w);
+                        if (const ScrollBar* w = e.try_get<ScrollBar>()) syncScrollBar(c, *w);
                         if (const TextInput* w = e.try_get<TextInput>()) syncTextInput(c, *w);
                         if (const Dropdown* w = e.try_get<Dropdown>()) syncDropdown(c, *w);
                         if (const ScrollView* w = e.try_get<ScrollView>()) syncScrollView(c, *w);

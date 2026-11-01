@@ -25,6 +25,11 @@ namespace Lu{
             glm::vec4 color{1.f, 1.f, 1.f, 1.f};   // tint: multiplied with the vertex color (and the texture)
             glm::vec4 uvRect{0.f, 0.f, 1.f, 1.f};  // uv = uvRect.xy + vertexUv * uvRect.zw (sub rectangle of the texture)
             glm::vec4 params{0.f, 0.f, 0.f, 0.f};  // free for your own shaders (corner radius, border width, ...)
+            // Optional clip rectangle for clipping pipelines (see shader/mesh2d_clip.*): an entity with a Transform2D AND a
+            // Transform2DGpu. The mesh is only drawn inside the unit square (0,0)..(1,1) of the LOCAL space of that
+            // transform: position / scale / rotation of that entity are the position / size / rotation of the clip rectangle, it
+            // follows its hierarchy automatically. 0 = no clipping. The shaders mesh2d_basic.* ignore it.
+            flecs::entity clip;
         };
 
         struct Mesh2DGpuDirty{};

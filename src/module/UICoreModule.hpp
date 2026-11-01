@@ -53,6 +53,35 @@ namespace Lu {
                     .each([](flecs::entity e) { markSubtreeDirty(e); });
             }
 
+            // Cursor in the local pixels of a node (0..size inside), false if the node has no usable transform.
+            inline bool cursorInNode(const WorldTransform2D& wt, const Node& node, glm::vec2 cursor, glm::vec2& local) {
+                if (wt.scale.x == 0.0f || wt.scale.y == 0.0f) return false;
+                const glm::vec3 d = glm::inverse(wt.rotation) * glm::vec3(cursor - wt.position, 0.0f);
+                local = glm::vec2(d.x / wt.scale.x, d.y / wt.scale.y);
+                return local.x >= 0.0f && local.y >= 0.0f && local.x <= node.size.x && local.y <= node.size.y;
+            }
+
+            // Nodes inside a ScrollView can only be hit inside its viewport (what sticks out is clipped / not drawn).
+            inline bool cursorInsideScrollViews(flecs::entity e, glm::vec2 cursor) {
+                for (flecs::entity p = e.parent(); p.id() != 0; p = p.parent()) {
+                    if (!p.has<ScrollView>()) continue;
+                    const WorldTransform2D* wt = p.try_get<WorldTransform2D>();
+                    const Node* node = p.try_get<Node>();
+                    glm::vec2 local;
+                    if (!wt || !node || !cursorInNode(*wt, *node, cursor, local)) return false;
+                }
+                return true;
+            }
+
+            // The clip rectangle entity of a ScrollView exists and is mirrored by the GPU: partly visible children are drawn clipped.
+            inline bool ownClipReady(flecs::entity view) {
+                const Parts* parts = view.try_get<Parts>();
+                if (!parts) return false;
+                flecs::world w = view.world();
+                const flecs::entity_t id = parts->child[static_cast<size_t>(Child::ScrollClip)];
+                return alive(w, id) && w.entity(id).has<Transform2DGpu>();
+            }
+
             // =====================================================================================================
             //  Mouse: hover / press / click / focus, top-most node first, modal windows, drag.
             // =====================================================================================================
@@ -100,12 +129,7 @@ namespace Lu {
                                 Candidate c{e, &interacts[i], glm::vec2(0.0f), false};
                                 if (!isHidden(e)) {
                                     const WorldTransform2D& wt = worlds[i];
-                                    if (wt.scale.x != 0.0f && wt.scale.y != 0.0f) {
-                                        const glm::vec3 d = glm::inverse(wt.rotation) * glm::vec3(cursor - wt.position, 0.0f);
-                                        c.local = glm::vec2(d.x / wt.scale.x, d.y / wt.scale.y);
-                                        c.hit = c.local.x >= 0.0f && c.local.y >= 0.0f &&
-                                                c.local.x <= nodes[i].size.x && c.local.y <= nodes[i].size.y;
-                                    }
+                                    c.hit = cursorInNode(wt, nodes[i], cursor, c.local) && cursorInsideScrollViews(e, cursor);
                                     if (c.hit && modalId != 0 && !isSelfOrDescendant(e, modalId)) c.hit = false;
                                     if (c.hit) {
                                         const size_t depth = depthOf(e);
@@ -372,9 +396,24 @@ namespace Lu {
                         sv.contentHeight = contentHeight;
                         e.set<ScrollView>(sv);
                     }
+                    // With GPU clipping a child is shown as long as a part of it is inside the viewport (the clip rectangle cuts
+                    // the rest). Without: only children that are completely inside can be shown.
+                    const bool clipping = scroll->clip && canClip(resolveStyle(e)) && ownClipReady(e);
+                    // The clip rectangle just became ready / went away: the parts below were drawn for the other state, redraw them
+                    // (here and not in the sync pass: a Dirty tag set there is removed again by the sync of the child itself).
+                    if (const Parts* have = e.try_get<Parts>()) {
+                        if (have->clipApplied != clipping) {
+                            Parts changed = *have;
+                            changed.clipApplied = clipping;
+                            e.set<Parts>(changed);
+                            for (LayoutChild& k : kids) markSubtreeDirty(k.entity);
+                            e.children([&](flecs::entity child) { if (!child.has<Node>()) return; markSubtreeDirty(child); });
+                        }
+                    }
                     for (LayoutChild& k : kids) {
                         k.position.y -= offset;
-                        const bool inside = k.position.y >= 0.0f && k.position.y + k.size.y <= viewport + 0.01f;
+                        const bool inside = clipping ? (k.position.y + k.size.y > 0.0f && k.position.y < viewport)
+                                                     : (k.position.y >= 0.0f && k.position.y + k.size.y <= viewport + 0.01f);
                         if (inside && k.entity.has<Clipped>()) k.entity.remove<Clipped>();
                         else if (!inside && !k.entity.has<Clipped>()) k.entity.add<Clipped>();
                     }

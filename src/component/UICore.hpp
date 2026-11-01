@@ -39,6 +39,8 @@
 //      Mesh2D::UICircle   circle, diameter 1  registerShape2D<Shape2D::Circle>("Mesh2D::UICircle", 0.5f, 48u, glm::vec2(0.5f))
 //                         (both shapes span (0,0)..(1,1): a widget scales them with the Transform2D of the drawing entity)
 //      Mesh2DPipe::Basic, Font::Main, FontPipe::Basic
+//  Optional (GPU clipping inside a ScrollView, see ScrollView.hpp):
+//      Mesh2DPipe::UIClip (shader/mesh2d_clip.*)   FontPipe::UIClip (shader/font_clip.*)
 // =====================================================================================================================
 namespace Lu {
     namespace UI {
@@ -104,6 +106,8 @@ namespace Lu {
             flecs::entity meshPipeline{};
             flecs::entity font{};
             flecs::entity fontPipeline{};
+            flecs::entity clipMeshPipeline{};   // "Mesh2DPipe::UIClip": mesh2d_clip.* shaders, used inside a clipping ScrollView
+            flecs::entity clipFontPipeline{};   // "FontPipe::UIClip":   font_clip.* shaders
 
             float fontSize{20.0f};
             float borderWidth{2.0f};
@@ -194,11 +198,14 @@ namespace Lu {
             InputBorder, InputFill, InputText,
             DropdownBorder, DropdownFill, DropdownText, DropdownArrow,
             WindowTitleBar, WindowTitleText,
+            // rounded rectangles (ScrollBar): 7 consecutive slots each (see Ctx::roundedRect)
+            BarTrack0, BarTrack1, BarTrack2, BarTrack3, BarTrack4, BarTrack5, BarTrack6,
+            BarThumb0, BarThumb1, BarThumb2, BarThumb3, BarThumb4, BarThumb5, BarThumb6,
             Count
         };
         inline constexpr size_t kSlotCount = static_cast<size_t>(Slot::Count);
 
-        enum class Child : uint8_t { WindowClose, WindowDrag, ScrollBar, Count };
+        enum class Child : uint8_t { WindowClose, WindowDrag, ScrollBar, ScrollClip, Count };
 
         // Written by the module only. Every part is two entities: `leaf` (Transform2D + Transform2DGpu, child of the widget)
         // and below it the entity with the Mesh2D / Text.
@@ -207,6 +214,7 @@ namespace Lu {
             std::array<flecs::entity_t, static_cast<size_t>(Child::Count)> child{};
             std::vector<flecs::entity_t> list{};   // dropdown options / tab buttons
             glm::vec2 labelEstimate{0.0f};         // size a Label with autoSize gave its Node last time
+            bool clipApplied{false};               // ScrollView: the children were redrawn for the current clip state
         };
     }
 

@@ -29,7 +29,7 @@ struct Font{
     uint glyphIndex;      // index of the glyph in its text   (for per-glyph effects)
     uint glyphCount;      // number of glyphs of the text
     float sdf;
-    uint pad0;
+    uint clipTransform2DId;   // used by font_clip.vert / .frag, ignored here
 };
 
 layout(set = 0, binding = 0) uniform Camera2DBuffer {

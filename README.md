@@ -294,7 +294,7 @@ world.entity("Volume").child_of(window)
 |---|---|
 | `Panel`, `Label`, `Image`, `ProgressBar` | display |
 | `Button`, `Toggle` (check box / radio group), `Slider`, `TextInput`, `Dropdown` | input |
-| `Window` (title bar, drag, close, raise on click), `TabView` + `TabPage`, `ScrollView` | containers |
+| `Window` (title bar, drag, close, raise on click), `TabView` + `TabPage`, `ScrollView` (+ `ScrollBar`) | containers |
 | `Layout` (horizontal / vertical / grid, auto size, grow) | on any node: places the child nodes |
 | `Style` | theme for the entity and everything below it |
 | `Interact`, `Draggable`, `Tooltip`, `Modal`, `Hidden` | add to any node |
@@ -302,7 +302,7 @@ world.entity("Volume").child_of(window)
 * Changing a widget component (`set`, or `get_mut` + `modified`) redraws it. The widgets that need several entities create them in an observer-triggered pass of the UI module (phase `UISync`), widgets inside widgets are created one frame later each.
 * Everything uses the `Transform2D` hierarchy: moving, hiding (`Hidden`) or destroying a widget moves / hides / destroys everything below it. Layers (`positionZ`) are derived from `Node::layer` (a child sits above its parent), the top-most node under the cursor gets the mouse (`Lu::UI::Pointer::of(world).overUI` tells you whether the mouse is over the UI).
 * Needed assets: `Mesh2D::UIRect` / `Mesh2D::UICircle` (unit shapes spanning (0,0)..(1,1)), `Mesh2DPipe::Basic`, `Font::Main`, `FontPipe::Basic` (names can be changed in `Style`).
-* There is no GPU clipping: children of a `ScrollView` that are not completely inside get the `Clipped` tag and are not drawn.
+* `ScrollView` clips on the GPU: `Mesh2D::clip` / `Text::clip` name an entity with a `Transform2D` (+ `Transform2DGpu`) whose unit square is the visible region; the clipping pipelines `Mesh2DPipe::UIClip` (`shader/mesh2d_clip.*`) and `FontPipe::UIClip` (`shader/font_clip.*`, see `examples/main_ui.cpp`) cut there, so partly visible children are drawn partly. Without these two pipelines a `ScrollView` falls back to hiding (`Clipped`) children that are not completely inside. Its `ScrollBar` is a rounded track with a rounded thumb of constant size that is at the very top / bottom at scroll 0 / maximum.
 
 </details>
 

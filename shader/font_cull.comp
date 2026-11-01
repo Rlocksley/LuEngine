@@ -29,7 +29,7 @@ struct Font{
     uint glyphIndex;
     uint glyphCount;
     float sdf;
-    uint pad0;
+    uint clipTransform2DId;   // 0xFFFFFFFF = no clip rectangle
 };
 
 // Fits VkDrawIndirectCommand

@@ -16,7 +16,7 @@ namespace Lu{
             uint32_t pipelineId{0};           // Mesh2D pipeline (selects the indirect buffer in mesh2d_cull.comp)
             uint32_t meshInfoId{0};           // GeometryInfo of the Mesh2D geometry
             uint32_t valid{0};                // 0 = free slot: not drawn
-            uint32_t _pad0{0};
+            uint32_t clipTransform2DId{UINT32_MAX};   // slot of the Transform2D that is the clip rectangle, UINT32_MAX = none
             uint32_t _pad1{0};
             uint32_t _pad2{0};
 
@@ -24,9 +24,11 @@ namespace Lu{
 
             Mesh2D(const glm::vec4& color, const glm::vec4& uvRect, const glm::vec4& params,
                    const uint32_t textureId, const uint32_t transform2DId,
-                   const uint32_t pipelineId, const uint32_t meshInfoId) :
+                   const uint32_t pipelineId, const uint32_t meshInfoId,
+                   const uint32_t clipTransform2DId = UINT32_MAX) :
                 color(color), uvRect(uvRect), params(params), textureId(textureId),
-                transform2DId(transform2DId), pipelineId(pipelineId), meshInfoId(meshInfoId), valid(1) {}
+                transform2DId(transform2DId), pipelineId(pipelineId), meshInfoId(meshInfoId), valid(1),
+                clipTransform2DId(clipTransform2DId) {}
         };
 
         using Mesh2DId = uint32_t;

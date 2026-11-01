@@ -30,7 +30,7 @@ struct Mesh2D{
     uint pipelineId;
     uint meshInfoId;
     uint valid;
-    uint pad0;
+    uint clipTransform2DId;   // used by mesh2d_clip.vert / .frag, ignored here
     uint pad1;
     uint pad2;
 };

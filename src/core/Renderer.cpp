@@ -274,7 +274,8 @@ namespace Lu{
                                 transform2D.getTransform2DId(req.parent),
                                 font.getFontId(req.font),
                                 font.getFontPipeId(req.pipe),
-                                req.text, req.color, req.size, req.lineSpacing, req.align, req.maxWidth
+                                req.text, req.color, req.size, req.lineSpacing, req.align, req.maxWidth,
+                                req.clip != 0 ? transform2D.getTransform2DId(req.clip) : UINT32_MAX
                             );
                         },
 
@@ -288,7 +289,8 @@ namespace Lu{
                                 transform2D.getTransform2DId(req.parent),
                                 mesh2DGeometry.getGeometryInfoId(req.mesh),
                                 req.texture != 0 ? texture.getTextureId(req.texture) : UINT32_MAX,
-                                req.color, req.uvRect, req.params
+                                req.color, req.uvRect, req.params,
+                                req.clip != 0 ? transform2D.getTransform2DId(req.clip) : UINT32_MAX
                             );
                         },
 

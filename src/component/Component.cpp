@@ -7,6 +7,7 @@
 #include "TextInput.hpp"
 #include "Dropdown.hpp"
 #include "ScrollView.hpp"
+#include "ScrollBar.hpp"
 #include "TabView.hpp"
 #include "FlyingCamera.hpp"
 #include "CharacterCamera.hpp"

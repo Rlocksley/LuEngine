@@ -18,7 +18,7 @@
 //   |   |- Gold / Science ...   Label
 //   |- CityWindow               Window (draggable, closable, raised on click)
 //   |   '- Tabs                 TabView
-//   |       |- Production       TabPage + Layout(vertical): Label, ProgressBar, ScrollView -> Button*
+//   |       |- Production       TabPage + Layout(vertical): Label, ProgressBar, ScrollView (GPU clipped, ScrollBar child) -> Button*
 //   |       '- Settings         TabPage + Layout(vertical): Slider, Toggle, Toggle(radio)*, Dropdown, TextInput
 //   |- NextTurn                 Button + Tooltip
 //   |- Status                   Label (changed by the callbacks)
@@ -187,12 +187,30 @@ int main(int argc, char** argv) {
             .fragmentShader = "shader/mesh2d_basic.frag.spv",
             .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
         })
+        // The same pipelines with clipping (shader/mesh2d_clip.*, shader/font_clip.*): the UI module uses them for everything
+        // inside a ScrollView, so a partly visible child is drawn partly. Without them the ScrollView can only hide
+        // children that are not completely inside.
+        .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
+            .name = "Mesh2DPipe::UIClip",
+            .capacity = 4096,
+            .vertexShader = "shader/mesh2d_clip.vert.spv",
+            .fragmentShader = "shader/mesh2d_clip.frag.spv",
+            .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
+        })
         .registerFont("Font::Main", fontPath, 64)
         .registerFontPipe(Lu::GraphicsPipelineConfig{
             .name = "FontPipe::Basic",
             .capacity = 4096,
             .vertexShader = "shader/font_basic.vert.spv",
             .fragmentShader = "shader/font_basic.frag.spv",
+            .cullMode = VK_CULL_MODE_NONE,
+            .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
+        })
+        .registerFontPipe(Lu::GraphicsPipelineConfig{
+            .name = "FontPipe::UIClip",
+            .capacity = 4096,
+            .vertexShader = "shader/font_clip.vert.spv",
+            .fragmentShader = "shader/font_clip.frag.spv",
             .cullMode = VK_CULL_MODE_NONE,
             .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
         })

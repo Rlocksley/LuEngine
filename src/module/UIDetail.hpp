@@ -16,6 +16,7 @@
 #include "TextInput.hpp"
 #include "Dropdown.hpp"
 #include "ScrollView.hpp"
+#include "ScrollBar.hpp"
 #include "TabView.hpp"
 #include "UIWindow.hpp"
 
@@ -42,6 +43,29 @@ namespace Lu {
 
             // ecs_is_alive asserts on id 0, stored ids are 0 until a part / child exists.
             inline bool alive(flecs::world& w, flecs::entity_t id) { return id != 0 && w.is_alive(id); }
+
+            // The GPU can clip (mesh2d_clip.* / font_clip.* pipelines are registered).
+            inline bool canClip(const Style& style) {
+                return style.clipMeshPipeline.id() != 0 && style.clipFontPipeline.id() != 0;
+            }
+
+            // The clip rectangle entity (a Transform2D + Transform2DGpu that is created by a ScrollView) that clips the
+            // parts of `e`: the nearest ScrollView ancestor with clip on, if its clip entity is ready. 0 = no clipping.
+            inline flecs::entity_t findClip(flecs::entity e) {
+                flecs::world w = e.world();
+                for (flecs::entity p = e.parent(); p.id() != 0; p = p.parent()) {
+                    const ScrollView* view = p.try_get<ScrollView>();
+                    if (!view) continue;
+                    if (!view->clip) return 0;
+                    const Parts* parts = p.try_get<Parts>();
+                    if (!parts) return 0;
+                    const flecs::entity_t id = parts->child[static_cast<size_t>(Child::ScrollClip)];
+                    if (!alive(w, id)) return 0;
+                    flecs::entity clip = w.entity(id);
+                    return clip.has<Transform2DGpu>() ? id : 0;
+                }
+                return 0;
+            }
 
             // ---- text size estimate (the ECS side has no font metrics) ---------------------------------------------------
             inline size_t countCodepoints(const std::string& s) {
@@ -157,6 +181,8 @@ namespace Lu {
                 fill(style.meshPipeline, "Mesh2DPipe::Basic");
                 fill(style.font, "Font::Main");
                 fill(style.fontPipeline, "FontPipe::Basic");
+                fill(style.clipMeshPipeline, "Mesh2DPipe::UIClip");
+                fill(style.clipFontPipeline, "FontPipe::UIClip");
                 return style;
             }
 
@@ -180,12 +206,12 @@ namespace Lu {
             inline bool same(const Mesh2D& a, const Mesh2D& b) {
                 return a.mesh.id() == b.mesh.id() && a.pipeline.id() == b.pipeline.id() &&
                        a.texture.id() == b.texture.id() && a.color == b.color && a.uvRect == b.uvRect &&
-                       a.params == b.params;
+                       a.params == b.params && a.clip.id() == b.clip.id();
             }
             inline bool same(const Text& a, const Text& b) {
                 return a.text == b.text && a.font.id() == b.font.id() && a.pipeline.id() == b.pipeline.id() &&
                        a.color == b.color && a.size == b.size && a.lineSpacing == b.lineSpacing &&
-                       a.align == b.align && a.maxWidth == b.maxWidth;
+                       a.align == b.align && a.maxWidth == b.maxWidth && a.clip.id() == b.clip.id();
             }
 
             // ---- the drawing context of one widget --------------------------------------------------------------------
@@ -203,12 +229,14 @@ namespace Lu {
                 Parts parts;
                 bool partsChanged{false};
                 bool nodeChanged{false};
+                flecs::entity_t clip{0};     // clip rectangle of the ScrollView this widget is in (0 = none)
 
                 explicit Ctx(flecs::entity entity) : e(entity), w(entity.world()) {
                     style = resolveStyle(e);
                     node = e.get<Node>();
                     size = node.size;
                     visible = !isHidden(e);
+                    if (canClip(style)) clip = findClip(e);
                     if (const Parts* p = e.try_get<Parts>()) parts = *p;
                 }
 
@@ -271,10 +299,20 @@ namespace Lu {
                     if (alive(w, leafId)) setVisible(w.entity(leafId), false);
                 }
 
+                // everything that is drawn inside a clipping ScrollView uses the clipping pipelines + the clip rectangle
+                void applyClip(Mesh2D& mesh) const {
+                    mesh.pipeline = clip != 0 ? style.clipMeshPipeline : style.meshPipeline;
+                    if (clip != 0) mesh.clip = w.entity(clip);
+                }
+                void applyClip(Text& text) const {
+                    text.pipeline = clip != 0 ? style.clipFontPipeline : style.fontPipeline;
+                    if (clip != 0) text.clip = w.entity(clip);
+                }
+
                 void rect(Slot slot, glm::vec2 position, glm::vec2 rectSize, uint32_t layer, const Color& color) {
                     Mesh2D mesh;
                     mesh.mesh = style.rect;
-                    mesh.pipeline = style.meshPipeline;
+                    applyClip(mesh);
                     mesh.color = color;
                     part(slot, position, glm::max(rectSize, glm::vec2(0.0f)), layer, mesh);
                 }
@@ -282,7 +320,7 @@ namespace Lu {
                 void circle(Slot slot, glm::vec2 position, glm::vec2 diameter, uint32_t layer, const Color& color) {
                     Mesh2D mesh;
                     mesh.mesh = style.circle;
-                    mesh.pipeline = style.meshPipeline;
+                    applyClip(mesh);
                     mesh.color = color;
                     part(slot, position, diameter, layer, mesh);
                 }
@@ -290,7 +328,7 @@ namespace Lu {
                 void image(Slot slot, glm::vec2 position, glm::vec2 rectSize, uint32_t layer, const Image& image) {
                     Mesh2D mesh;
                     mesh.mesh = style.rect;
-                    mesh.pipeline = style.meshPipeline;
+                    applyClip(mesh);
                     mesh.texture = image.texture;
                     mesh.color = image.tint;
                     mesh.uvRect = image.uvRect;
@@ -302,7 +340,7 @@ namespace Lu {
                     Text text;
                     text.text = str.empty() ? std::string(" ") : str;
                     text.font = style.font;
-                    text.pipeline = style.fontPipeline;
+                    applyClip(text);
                     text.color = color;
                     text.size = fontSize;
                     text.align = align;
@@ -321,6 +359,33 @@ namespace Lu {
                         hide(border);
                         rect(fill, position, rectSize, layer + 1, fillColor);
                     }
+                }
+
+                // Rounded rectangle from 7 parts (first .. first+6): a body, a top and a bottom bar and 4 corner circles.
+                void roundedRect(Slot first, glm::vec2 position, glm::vec2 rectSize, uint32_t layer, float radius, const Color& color) {
+                    auto slot = [&](int i) { return static_cast<Slot>(static_cast<int>(first) + i); };
+                    const float r = std::max(0.0f, std::min(radius, std::min(rectSize.x, rectSize.y) * 0.5f));
+                    if (r < 0.5f) {
+                        rect(slot(0), position, rectSize, layer, color);
+                        for (int i = 1; i < 7; ++i) hide(slot(i));
+                        return;
+                    }
+                    const float midH = rectSize.y - 2.0f * r;
+                    const float midW = rectSize.x - 2.0f * r;
+                    if (midH > 0.01f) rect(slot(0), position + glm::vec2(0.0f, r), {rectSize.x, midH}, layer, color);
+                    else hide(slot(0));
+                    if (midW > 0.01f) {
+                        rect(slot(1), position + glm::vec2(r, 0.0f), {midW, r}, layer, color);
+                        rect(slot(2), position + glm::vec2(r, rectSize.y - r), {midW, r}, layer, color);
+                    } else {
+                        hide(slot(1));
+                        hide(slot(2));
+                    }
+                    const glm::vec2 d(r * 2.0f);
+                    circle(slot(3), position, d, layer, color);
+                    circle(slot(4), position + glm::vec2(rectSize.x - d.x, 0.0f), d, layer, color);
+                    circle(slot(5), position + glm::vec2(0.0f, rectSize.y - d.y), d, layer, color);
+                    circle(slot(6), position + rectSize - d, d, layer, color);
                 }
 
                 float fontSizeOr(float own) const { return own > 0.0f ? own : style.fontSize; }

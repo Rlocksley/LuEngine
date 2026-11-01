@@ -50,11 +50,22 @@ namespace Module {
                             auto entity = it.entity(i);
                             const auto parent = entity.parent();
                             const Component::Text& text = texts[i];
+                            // The clip rectangle (a Transform2D) has to be mirrored before the text refers to it. Not yet:
+                            // stay dirty and try again next frame. A clip entity that does not exist (anymore) = no clip.
+                            flecs::entity_t clip = text.clip.id();
+                            if (clip != 0) {
+                                if (!it.world().is_alive(clip)) {
+                                    clip = 0;
+                                } else {
+                                    const auto clipEntity = it.world().entity(clip);
+                                    if (!clipEntity.has<Component::Transform2D>() || !clipEntity.has<Component::Transform2DGpu>()) continue;
+                                }
+                            }
                             if (parent.is_valid() && parent.has<Component::Transform2D>() && parent.has<Component::Transform2DGpu>() &&
                                 text.font.id() != 0 && text.pipeline.id() != 0) {
                                 requests.push_back(EcsRequest::CreateText{
                                     parent.id(), entity.id(), text.font.id(), text.pipeline.id(),
-                                    text.text, text.color, text.size, text.lineSpacing, text.align, text.maxWidth});
+                                    text.text, text.color, text.size, text.lineSpacing, text.align, text.maxWidth, clip});
                             }
                             entity.remove<Component::TextGpuDirty>();
                         }
