@@ -14,6 +14,7 @@ namespace Lu {
             Color textColor{kUnset};     // Style::text
             float fontSize{-1.0f};       // Style::fontSize
             bool selected{false};        // accent colored border (tabs, toggle buttons)
+            Icon icon{Icon::None};       // SDF look: an icon instead of the text (e.g. the close button of a Window)
             std::function<void(flecs::entity)> onClick{};
         };
     }

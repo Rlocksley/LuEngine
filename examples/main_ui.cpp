@@ -15,14 +15,19 @@
 //
 //   UI                          Style (theme, valid for the whole tree below)
 //   |- TopBar                   Panel + Layout(horizontal)
-//   |   |- Gold / Science ...   Label
+//   |   |- Gold / Science ...   Layout(horizontal): Panel (round gem) + Label
 //   |- CityWindow               Window (draggable, closable, raised on click)
 //   |   '- Tabs                 TabView
 //   |       |- Production       TabPage + Layout(vertical): Label, ProgressBar, ScrollView (GPU clipped, ScrollBar child) -> Button*
 //   |       '- Settings         TabPage + Layout(vertical): Slider, Toggle, Toggle(radio)*, Dropdown, TextInput
 //   |- NextTurn                 Button + Tooltip
 //   |- Status                   Label (changed by the callbacks)
+//   |- Backdrop                 Panel (dims everything behind the dialog)
 //   '- ConfirmDialog            Window + Modal (shown by the Next Turn button)
+//
+// The look: if the pipelines Mesh2DPipe::UI / Mesh2DPipe::UISoft (shader/mesh2d_ui.*) are registered (see main()) every widget is drawn
+// with signed distance fields: rounded corners, borders, gradients, bevels, soft shadows and glows, icons, anti-aliased, with animated
+// hover / press transitions. Without them the same tree is drawn with flat rectangles.
 // =====================================================================================================================
 
 static std::string findFont(int argc, char** argv) {
@@ -66,10 +71,24 @@ struct UIDemoModule {
             .set<Node>({.size = {1280.f, 44.f}})
             .set<Panel>({})
             .set<Layout>({.direction = Direction::Horizontal, .spacing = 40.f, .padding = {20.f, 10.f, 20.f, 10.f}});
-        world.entity("Gold").child_of(topBar).set<Transform2D>({}).set<Node>({.order = 0}).set<Label>({.text = "Gold: 214 (+7)"});
-        world.entity("Science").child_of(topBar).set<Transform2D>({}).set<Node>({.order = 1}).set<Label>({.text = "Science: +12"});
-        world.entity("Culture").child_of(topBar).set<Transform2D>({}).set<Node>({.order = 2}).set<Label>({.text = "Culture: +5"});
-        world.entity("Turn").child_of(topBar).set<Transform2D>({}).set<Node>({.order = 3}).set<Label>({.text = "Turn 42"});
+        // a resource = a horizontal Layout (auto size) with a round gem (a Panel with radius = half of its size) and a Label
+        struct Resource { const char* name; const char* text; Color gem; };
+        const Resource resources[] = {
+            {"Gold",    "Gold: 214 (+7)", {0.95f, 0.76f, 0.25f, 1.f}},
+            {"Science", "Science: +12",   {0.35f, 0.70f, 0.95f, 1.f}},
+            {"Culture", "Culture: +5",    {0.80f, 0.45f, 0.90f, 1.f}},
+            {"Turn",    "Turn 42",        {0.85f, 0.85f, 0.85f, 1.f}},
+        };
+        for (int i = 0; i < 4; ++i) {
+            flecs::entity resource = world.entity(resources[i].name).child_of(topBar)
+                .set<Transform2D>({}).set<Node>({.order = i})
+                .set<Layout>({.direction = Direction::Horizontal, .spacing = 8.f, .padding = {0.f, 0.f, 0.f, 0.f},
+                              .crossAlign = Align::Center, .autoSize = true});
+            world.entity().child_of(resource).set<Transform2D>({}).set<Node>({.size = {16.f, 16.f}, .order = 0})
+                .set<Panel>({.color = resources[i].gem, .borderColor = {1.f, 1.f, 1.f, 0.55f}, .borderWidth = 1.f, .radius = 8.f});
+            world.entity().child_of(resource).set<Transform2D>({}).set<Node>({.order = 1})
+                .set<Label>({.text = resources[i].text, .shadow = true});
+        }
 
         // ---- the city window --------------------------------------------------------------------------------------
         flecs::entity city = world.entity("CityWindow").child_of(ui)
@@ -143,6 +162,11 @@ struct UIDemoModule {
                             }});
 
         // ---- next turn: Button + Tooltip, opens a modal dialog ------------------------------------------------------
+        flecs::entity backdrop = world.entity("Backdrop").child_of(ui)
+            .set<Transform2D>({})
+            .set<Node>({.size = {1280.f, 800.f}, .layer = 1900})
+            .set<Panel>({.color = {0.f, 0.f, 0.f, 0.55f}, .borderWidth = 0.f, .radius = 0.f})
+            .add<Hidden>();
         flecs::entity dialog = world.entity("ConfirmDialog").child_of(ui)
             .set<Transform2D>({.position = {460.f, 300.f}})
             .set<Node>({.size = {360.f, 170.f}, .layer = 2000})
@@ -155,19 +179,20 @@ struct UIDemoModule {
         world.entity("Yes").child_of(dialog)
             .set<Transform2D>({.position = {24.f, 114.f}})
             .set<Node>({.size = {150.f, 36.f}})
-            .set<Button>({.text = "Yes", .onClick = [dialog, status](flecs::entity) {
+            .set<Button>({.text = "Yes", .onClick = [dialog, backdrop, status](flecs::entity) {
                 dialog.add<Hidden>();
+                backdrop.add<Hidden>();
                 status.set<Label>({.text = "Turn ended.", .fontSize = 18.f});
             }});
         world.entity("No").child_of(dialog)
             .set<Transform2D>({.position = {186.f, 114.f}})
             .set<Node>({.size = {150.f, 36.f}})
-            .set<Button>({.text = "No", .onClick = [dialog](flecs::entity) { dialog.add<Hidden>(); }});
+            .set<Button>({.text = "No", .onClick = [dialog, backdrop](flecs::entity) { dialog.add<Hidden>(); backdrop.add<Hidden>(); }});
 
         world.entity("NextTurn").child_of(ui)
             .set<Transform2D>({.position = {1060.f, 730.f}})
             .set<Node>({.size = {200.f, 50.f}})
-            .set<Button>({.text = "Next Turn", .fontSize = 24.f, .onClick = [dialog](flecs::entity) { dialog.remove<Hidden>(); }})
+            .set<Button>({.text = "Next Turn", .fontSize = 24.f, .onClick = [dialog, backdrop](flecs::entity) { dialog.remove<Hidden>(); backdrop.remove<Hidden>(); }})
             .set<Tooltip>({.text = "Ends the turn of all your units.\nThe game asks for confirmation."});
     }
 };
@@ -187,15 +212,28 @@ int main(int argc, char** argv) {
             .fragmentShader = "shader/mesh2d_basic.frag.spv",
             .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
         })
-        // The same pipelines with clipping (shader/mesh2d_clip.*, shader/font_clip.*): the UI module uses them for everything
-        // inside a ScrollView, so a partly visible child is drawn partly. Without them the ScrollView can only hide
-        // children that are not completely inside.
+        // The SDF look (shader/mesh2d_ui.*): every GUI shape is a rounded rectangle / icon computed in the fragment shader, anti-aliased
+        // and clipped inside ScrollViews. Crisp shapes: alpha to coverage (MSAA), no blending, depth write: edges are anti-aliased
+        // independent of the draw order. Translucent shapes, soft shadows and glows: blended, no depth write, registered AFTER the
+        // crisp ones (pipelines are drawn in registration order).
         .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
-            .name = "Mesh2DPipe::UIClip",
+            .name = "Mesh2DPipe::UI",
             .capacity = 4096,
-            .vertexShader = "shader/mesh2d_clip.vert.spv",
-            .fragmentShader = "shader/mesh2d_clip.frag.spv",
-            .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL
+            .vertexShader = "shader/mesh2d_ui.vert.spv",
+            .fragmentShader = "shader/mesh2d_ui.frag.spv",
+            .depthWriteEnable = true,
+            .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+            .blendEnable = false,
+            .alphaToCoverageEnable = true
+        })
+        .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
+            .name = "Mesh2DPipe::UISoft",
+            .capacity = 4096,
+            .vertexShader = "shader/mesh2d_ui.vert.spv",
+            .fragmentShader = "shader/mesh2d_ui.frag.spv",
+            .depthWriteEnable = false,
+            .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+            .blendEnable = true
         })
         .registerFont("Font::Main", fontPath, 64)
         .registerFontPipe(Lu::GraphicsPipelineConfig{

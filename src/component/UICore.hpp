@@ -41,6 +41,14 @@
 //      Mesh2DPipe::Basic, Font::Main, FontPipe::Basic
 //  Optional (GPU clipping inside a ScrollView, see ScrollView.hpp):
 //      Mesh2DPipe::UIClip (shader/mesh2d_clip.*)   FontPipe::UIClip (shader/font_clip.*)
+//  Optional, for a modern look (see "SDF look" below and shader/mesh2d_ui.frag):
+//      Mesh2DPipe::UI     shader/mesh2d_ui.*  alphaToCoverageEnable = true, blendEnable = false   (crisp SDF shapes + clipping)
+//      Mesh2DPipe::UISoft shader/mesh2d_ui.*  blendEnable = true, depthWriteEnable = false          (soft shadows and glows),
+//                                             registered AFTER Mesh2DPipe::UI
+//
+//  SDF look: if Mesh2DPipe::UI exists every widget is drawn with signed distance fields: rounded corners, borders, gradients, inner
+//  bevels, icons, anti-aliased at any zoom, and (with Mesh2DPipe::UISoft) soft drop shadows and glows, and hover / press changes are
+//  animated. Without these pipelines the widgets are drawn with flat rectangles and circles (the Mesh2D assets above).
 // =====================================================================================================================
 namespace Lu {
     namespace UI {
@@ -108,6 +116,8 @@ namespace Lu {
             flecs::entity fontPipeline{};
             flecs::entity clipMeshPipeline{};   // "Mesh2DPipe::UIClip": mesh2d_clip.* shaders, used inside a clipping ScrollView
             flecs::entity clipFontPipeline{};   // "FontPipe::UIClip":   font_clip.* shaders
+            flecs::entity shapePipeline{};      // "Mesh2DPipe::UI":     mesh2d_ui.* with alpha to coverage: the SDF look (also clips)
+            flecs::entity softPipeline{};       // "Mesh2DPipe::UISoft": mesh2d_ui.* blended: shadows and glows (optional)
 
             float fontSize{20.0f};
             float borderWidth{2.0f};
@@ -121,6 +131,16 @@ namespace Lu {
             Color titleBar{0.10f, 0.14f, 0.22f, 1.0f};
             Color track{0.02f, 0.03f, 0.05f, 1.0f};
             Color knob{0.92f, 0.86f, 0.68f, 1.0f};
+
+            // SDF look
+            float radius{8.0f};                     // corner radius of buttons, inputs, panels (windows use 1.5 x)
+            float gradient{0.10f};                  // lighter at the top, 0 = flat
+            Color shadowColor{0.0f, 0.0f, 0.0f, 0.55f};
+            glm::vec2 shadowOffset{0.0f, 5.0f};
+            float shadowBlur{14.0f};
+            Color textShadow{0.0f, 0.0f, 0.0f, 0.70f};   // 1 pixel shadow below titles / buttons, alpha 0 = none
+            Color bevel{1.0f, 1.0f, 1.0f, 0.10f};        // 1 pixel inner highlight of panels / buttons, alpha 0 = none
+            float animationTime{0.10f};                  // seconds of the hover / press transitions, 0 = instant
             ColorSet button{{0.12f, 0.19f, 0.28f, 1.0f}, {0.18f, 0.28f, 0.40f, 1.0f},
                             {0.07f, 0.12f, 0.19f, 1.0f}, {0.09f, 0.10f, 0.12f, 1.0f}};
             ColorSet input{{0.03f, 0.05f, 0.08f, 1.0f}, {0.06f, 0.09f, 0.14f, 1.0f},
@@ -143,7 +163,13 @@ namespace Lu {
             std::function<void(flecs::entity)> onClick{};
             std::function<void(flecs::entity)> onRightClick{};
             std::function<void(flecs::entity, bool)> onHover{};
+            // smooth transitions 0..1 towards hovered / pressed (Style::animationTime), written by the module; what the SDF look uses
+            float hoverT{0.0f};
+            float pressT{0.0f};
         };
+
+        // Icons of the SDF look (Button::icon).
+        enum class Icon : uint8_t { None, Check, ChevronDown, ChevronUp, Cross, ChevronRight, ChevronLeft };
 
         // Moves `target` (default: the parent of this entity) with the mouse while this node is held. The title bar of a Window
         // is such a node. `bounds` = minX, minY, maxX, maxY of the target position in the local space of its parent
@@ -198,7 +224,12 @@ namespace Lu {
             InputBorder, InputFill, InputText,
             DropdownBorder, DropdownFill, DropdownText, DropdownArrow,
             WindowTitleBar, WindowTitleText,
-            // rounded rectangles (ScrollBar): 7 consecutive slots each (see Ctx::roundedRect)
+            // SDF look
+            PanelShadow, PanelBevel, PanelFrame, WindowShadow, WindowSeparator, WindowTitleShadow,
+            ButtonShadow, ButtonGlow, ButtonBevel, ButtonTextShadow, ButtonIcon,
+            ToggleGlow, SliderKnobShadow, ProgressGloss, ProgressTextShadow, InputGlow, InputBevel,
+            DropdownShadow, DropdownGlow, DropdownIcon, LabelShadow,
+            // rounded rectangles (ScrollBar, flat look): 7 consecutive slots each (see Ctx::roundedRect)
             BarTrack0, BarTrack1, BarTrack2, BarTrack3, BarTrack4, BarTrack5, BarTrack6,
             BarThumb0, BarThumb1, BarThumb2, BarThumb3, BarThumb4, BarThumb5, BarThumb6,
             Count

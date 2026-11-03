@@ -199,6 +199,27 @@ namespace Lu {
                         }
                     });
 
+                // ---- hover / press transitions (Interact::hoverT / pressT), used by the SDF look ---------------------------------
+                world.system<Interact>("UIAnimate")
+                    .kind(phases.input)
+                    .each([](flecs::iter& it, size_t index, Interact& in) {
+                        const float hoverTarget = (in.hovered && in.enabled) ? 1.0f : 0.0f;
+                        const float pressTarget = (in.pressed && in.hovered && in.enabled) ? 1.0f : 0.0f;
+                        if (in.hoverT == hoverTarget && in.pressT == pressTarget) return;
+                        flecs::entity e = it.entity(index);
+                        float seconds = Style{}.animationTime;
+                        for (flecs::entity p = e; p.id() != 0; p = p.parent()) {
+                            if (const Style* s = p.try_get<Style>()) { seconds = s->animationTime; break; }
+                        }
+                        const float step = seconds > 0.0f ? it.delta_time() / seconds : 1.0f;
+                        auto move = [step](float value, float target) {
+                            return value < target ? std::min(target, value + step) : std::max(target, value - step);
+                        };
+                        in.hoverT = move(in.hoverT, hoverTarget);
+                        in.pressT = move(in.pressT, pressTarget);
+                        e.modified<Interact>();
+                    });
+
                 // ---- Draggable --------------------------------------------------------------------------------------
                 world.system<const Draggable, const Interact, const Component::InputState>("UIDraggable")
                     .kind(phases.input)
@@ -255,7 +276,7 @@ namespace Lu {
                             node.inLayout = false;
                             Transform2D t;
                             t.position = p.cursor + glm::vec2(16.0f, 20.0f);
-                            flecs::entity popup = w.entity().set<Style>(style).set<Transform2D>(t).set<Node>(node).set<Panel>({});
+                            flecs::entity popup = w.entity().set<Style>(style).set<Transform2D>(t).set<Node>(node).set<Panel>({.shadow = true});
                             Node labelNode;
                             labelNode.size = {textWidth, textHeight};
                             Transform2D lt;

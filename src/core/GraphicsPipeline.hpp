@@ -103,6 +103,7 @@ namespace Lu{
 			multisampleStateCreateInfo.rasterizationSamples = config.sampleCount == VK_SAMPLE_COUNT_FLAG_BITS_MAX_ENUM ? vkSampleCountFlagBits : config.sampleCount;
 			multisampleStateCreateInfo.minSampleShading = config.minSampleShading;
 			multisampleStateCreateInfo.sampleShadingEnable = VK_FALSE;
+			multisampleStateCreateInfo.alphaToCoverageEnable = config.alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
 
 			VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo{};
 			depthStencilStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;

@@ -14,11 +14,44 @@ namespace Lu {
                 return in ? *in : Interact{};
             }
 
+            // Colors of a widget with hover / press transitions (Interact::hoverT / pressT), SDF look.
+            inline Color stateMix(const ColorSet& set, const Interact& in) {
+                if (!in.enabled) return set.disabled;
+                return lerpColor(lerpColor(set.normal, set.hover, in.hoverT), set.pressed, in.pressT);
+            }
+
+            // ---- Panel ------------------------------------------------------------------------------------------------
             inline void syncPanel(Ctx& c, const Panel& panel) {
                 c.defaultSize({200.0f, 120.0f});
                 const float bw = panel.borderWidth >= 0.0f ? panel.borderWidth : c.style.borderWidth;
-                c.bordered(Slot::PanelBorder, Slot::PanelFill, {0.0f, 0.0f}, c.size, 0, bw,
-                           pick(panel.borderColor, c.style.panelBorder), pick(panel.color, c.style.panel));
+                const Color border = pick(panel.borderColor, c.style.panelBorder);
+                const Color fill = pick(panel.color, c.style.panel);
+                if (!c.sdf) {
+                    c.bordered(Slot::PanelBorder, Slot::PanelFill, {0.0f, 0.0f}, c.size, 0, bw, border, fill);
+                    return;
+                }
+                const bool window = c.e.has<Window>();
+                const float radius = panel.radius >= 0.0f ? panel.radius : c.style.radius * (window ? 1.5f : 1.0f);
+                if (panel.shadow || window) {
+                    const float k = window ? 1.7f : 1.0f;
+                    c.soft(Slot::PanelShadow, {0.0f, 0.0f}, c.size, 0, radius, c.style.shadowBlur * k, c.style.shadowOffset * k, c.style.shadowColor);
+                } else {
+                    c.hide(Slot::PanelShadow);
+                }
+                Ctx::BoxDesc box;
+                box.radius = radius;
+                box.borderWidth = bw;
+                box.border = border;
+                box.fill = fill;
+                box.gradient = c.style.gradient;
+                c.box(Slot::PanelBorder, Slot::PanelFill, {0.0f, 0.0f}, c.size, 0, box);
+                c.ring(Slot::PanelBevel, glm::vec2(bw), c.size - glm::vec2(bw * 2.0f), 2, std::max(0.0f, radius - bw), 1.0f, c.style.bevel);
+                if (window || panel.frame) {    // a second, thin line inside of the border
+                    const float inset = bw + 4.0f;
+                    c.ring(Slot::PanelFrame, glm::vec2(inset), c.size - glm::vec2(inset * 2.0f), 2, std::max(0.0f, radius - inset), 1.0f, withAlpha(border, 0.30f));
+                } else {
+                    c.hide(Slot::PanelFrame);
+                }
             }
 
             inline void syncLabel(Ctx& c, const Label& label) {
@@ -36,7 +69,12 @@ namespace Lu {
                 if (label.align == TextAlign::Center) x = c.size.x * 0.5f;
                 else if (label.align == TextAlign::Right) x = c.size.x;
                 const float y = label.verticalCenter ? std::max(0.0f, (c.size.y - fs) * 0.5f) : 0.0f;
-                c.text(Slot::LabelText, {x, y}, 0, label.text, pick(label.color, c.style.text), fs, label.align, label.maxWidth);
+                if (label.shadow) {
+                    c.textShadowed(Slot::LabelText, Slot::LabelShadow, {x, y}, 1, label.text, pick(label.color, c.style.text), fs, label.align, label.maxWidth);
+                } else {
+                    c.hide(Slot::LabelShadow);
+                    c.text(Slot::LabelText, {x, y}, 0, label.text, pick(label.color, c.style.text), fs, label.align, label.maxWidth);
+                }
             }
 
             inline void syncImage(Ctx& c, const Image& image) {
@@ -44,26 +82,64 @@ namespace Lu {
                 c.image(Slot::ImageRect, {0.0f, 0.0f}, c.size, 0, image);
             }
 
+            // ---- ProgressBar ----------------------------------------------------------------------------------------------
             inline void syncProgress(Ctx& c, const ProgressBar& bar) {
                 const bool horizontal = bar.orientation == Orientation::Horizontal;
                 c.defaultSize(horizontal ? glm::vec2(200.0f, 22.0f) : glm::vec2(22.0f, 200.0f));
                 const float bw = std::min(c.style.borderWidth, std::min(c.size.x, c.size.y) * 0.25f);
-                c.bordered(Slot::ProgressBorder, Slot::ProgressTrack, {0.0f, 0.0f}, c.size, 0, bw,
-                           c.style.panelBorder, pick(bar.trackColor, c.style.track));
                 const glm::vec2 inner = c.size - glm::vec2(bw * 2.0f);
                 const float v = std::clamp(bar.value, 0.0f, 1.0f);
+                const float fs = std::min(c.style.fontSize, std::max(8.0f, c.size.y - 4.0f));
+                if (!c.sdf) {
+                    c.bordered(Slot::ProgressBorder, Slot::ProgressTrack, {0.0f, 0.0f}, c.size, 0, bw,
+                               c.style.panelBorder, pick(bar.trackColor, c.style.track));
+                    if (v > 0.0f && inner.x > 0.0f && inner.y > 0.0f) {
+                        if (horizontal) c.rect(Slot::ProgressFill, {bw, bw}, {inner.x * v, inner.y}, 2, pick(bar.fillColor, c.style.accent));
+                        else c.rect(Slot::ProgressFill, {bw, bw + inner.y * (1.0f - v)}, {inner.x, inner.y * v}, 2, pick(bar.fillColor, c.style.accent));
+                    } else {
+                        c.hide(Slot::ProgressFill);
+                    }
+                    if (bar.showText) {
+                        c.text(Slot::ProgressText, {c.size.x * 0.5f, std::max(0.0f, (c.size.y - fs) * 0.5f)}, 3,
+                               std::to_string(static_cast<int>(std::round(v * 100.0f))) + "%", c.style.text, fs, TextAlign::Center);
+                    } else {
+                        c.hide(Slot::ProgressText);
+                    }
+                    return;
+                }
+                const float radius = std::min(c.style.radius, std::min(c.size.x, c.size.y) * 0.5f);
+                Ctx::BoxDesc track;
+                track.radius = radius;
+                track.borderWidth = bw;
+                track.border = darker(c.style.panelBorder, 0.85f);
+                track.fill = pick(bar.trackColor, c.style.track);
+                track.gradient = -0.35f;                                    // inset: darker at the top
+                c.box(Slot::ProgressBorder, Slot::ProgressTrack, {0.0f, 0.0f}, c.size, 0, track);
+                const Color fillColor = pick(bar.fillColor, c.style.accent);
                 if (v > 0.0f && inner.x > 0.0f && inner.y > 0.0f) {
-                    if (horizontal) c.rect(Slot::ProgressFill, {bw, bw}, {inner.x * v, inner.y}, 2, pick(bar.fillColor, c.style.accent));
-                    else c.rect(Slot::ProgressFill, {bw, bw + inner.y * (1.0f - v)}, {inner.x, inner.y * v}, 2, pick(bar.fillColor, c.style.accent));
+                    const glm::vec2 pos = horizontal ? glm::vec2(bw) : glm::vec2(bw, bw + inner.y * (1.0f - v));
+                    const glm::vec2 size = horizontal ? glm::vec2(inner.x * v, inner.y) : glm::vec2(inner.x, inner.y * v);
+                    Ctx::BoxDesc fill;
+                    fill.radius = std::max(0.0f, radius - bw);
+                    fill.fill = fillColor;
+                    fill.gradient = 0.32f;
+                    c.box(Slot::ProgressFill, Slot::ProgressFill, pos, size, 1, fill);
+                    // gloss: lighter upper half
+                    Ctx::BoxDesc gloss;
+                    gloss.radius = fill.radius;
+                    gloss.fill = Color(1.0f, 1.0f, 1.0f, 0.16f);
+                    gloss.kind = 7;
+                    c.box(Slot::ProgressGloss, Slot::ProgressGloss, pos, glm::vec2(size.x, size.y * 0.5f), 2, gloss);
                 } else {
                     c.hide(Slot::ProgressFill);
+                    c.hide(Slot::ProgressGloss);
                 }
                 if (bar.showText) {
-                    const float fs = std::min(c.style.fontSize, std::max(8.0f, c.size.y - 4.0f));
-                    c.text(Slot::ProgressText, {c.size.x * 0.5f, std::max(0.0f, (c.size.y - fs) * 0.5f)}, 3,
-                           std::to_string(static_cast<int>(std::round(v * 100.0f))) + "%", c.style.text, fs, TextAlign::Center);
+                    c.textShadowed(Slot::ProgressText, Slot::ProgressTextShadow, {c.size.x * 0.5f, std::max(0.0f, (c.size.y - fs) * 0.5f)}, 5,
+                                   std::to_string(static_cast<int>(std::round(v * 100.0f))) + "%", c.style.text, fs, TextAlign::Center);
                 } else {
                     c.hide(Slot::ProgressText);
+                    c.hide(Slot::ProgressTextShadow);
                 }
             }
 
@@ -72,13 +148,46 @@ namespace Lu {
                 c.defaultSize({160.0f, 40.0f});
                 const Interact in = interactOf(c.e);
                 const ColorSet colors = pickSet(button.colors, c.style.button);
-                const bool lit = in.enabled && (button.selected || in.hovered);
-                c.bordered(Slot::ButtonBorder, Slot::ButtonFill, {0.0f, 0.0f}, c.size, 0, c.style.borderWidth,
-                           lit ? c.style.accent : (in.enabled ? c.style.panelBorder : c.style.textDisabled),
-                           stateColor(colors, in));
                 const float fs = c.fontSizeOr(button.fontSize);
-                c.text(Slot::ButtonText, {c.size.x * 0.5f, std::max(0.0f, (c.size.y - fs) * 0.5f)}, 3, button.text,
-                       in.enabled ? pick(button.textColor, c.style.text) : c.style.textDisabled, fs, TextAlign::Center);
+                const Color textColor = in.enabled ? pick(button.textColor, c.style.text) : c.style.textDisabled;
+                if (!c.sdf) {
+                    const bool lit = in.enabled && (button.selected || in.hovered);
+                    c.bordered(Slot::ButtonBorder, Slot::ButtonFill, {0.0f, 0.0f}, c.size, 0, c.style.borderWidth,
+                               lit ? c.style.accent : (in.enabled ? c.style.panelBorder : c.style.textDisabled),
+                               stateColor(colors, in));
+                    c.text(Slot::ButtonText, {c.size.x * 0.5f, std::max(0.0f, (c.size.y - fs) * 0.5f)}, 3, button.text, textColor, fs, TextAlign::Center);
+                    return;
+                }
+                const float radius = std::min(c.style.radius, std::min(c.size.x, c.size.y) * 0.5f);
+                const float hover = in.enabled ? in.hoverT : 0.0f;
+                const float press = in.enabled ? in.pressT : 0.0f;
+                const float lit = std::max(hover, button.selected && in.enabled ? 1.0f : 0.0f);
+                const float bw = c.style.borderWidth;
+                const float enabled = in.enabled ? 1.0f : 0.0f;
+
+                c.soft(Slot::ButtonShadow, {0.0f, 0.0f}, c.size, 0, radius, 6.0f, {0.0f, 2.0f}, withAlpha(c.style.shadowColor, 0.8f * (1.0f - press) * enabled));
+                c.soft(Slot::ButtonGlow, {0.0f, 0.0f}, c.size, 0, radius, 10.0f, {0.0f, 0.0f}, withAlpha(c.style.accent, 0.40f * lit));
+
+                Ctx::BoxDesc box;
+                box.radius = radius;
+                box.borderWidth = bw;
+                box.border = in.enabled ? lerpColor(c.style.panelBorder, c.style.accent, lit) : c.style.textDisabled;
+                box.fill = stateMix(colors, in);
+                box.gradient = c.style.gradient * (1.0f - press) - c.style.gradient * 0.8f * press;
+                c.box(Slot::ButtonBorder, Slot::ButtonFill, {0.0f, 0.0f}, c.size, 0, box);
+                c.ring(Slot::ButtonBevel, glm::vec2(bw), c.size - glm::vec2(bw * 2.0f), 3, std::max(0.0f, radius - bw), 1.0f,
+                       withAlpha(c.style.bevel, (1.0f - press) * enabled));
+
+                if (button.icon != Icon::None) {
+                    const float s = std::min(c.size.x, c.size.y) * 0.5f;
+                    c.icon(Slot::ButtonIcon, {(c.size.x - s) * 0.5f, (c.size.y - s) * 0.5f + press}, glm::vec2(s), 4, button.icon, std::max(2.0f, s * 0.14f), textColor);
+                    c.hide(Slot::ButtonText);
+                    c.hide(Slot::ButtonTextShadow);
+                } else {
+                    c.hide(Slot::ButtonIcon);
+                    c.textShadowed(Slot::ButtonText, Slot::ButtonTextShadow, {c.size.x * 0.5f, std::max(0.0f, (c.size.y - fs) * 0.5f) + press}, 5,
+                                   button.text, textColor, fs, TextAlign::Center);
+                }
             }
 
             // ---- Toggle -----------------------------------------------------------------------------------------------
@@ -89,22 +198,48 @@ namespace Lu {
                 const float box = std::max(8.0f, std::min(c.size.y - 4.0f, 24.0f));
                 const glm::vec2 boxPos(0.0f, (c.size.y - box) * 0.5f);
                 const ColorSet colors = pickSet(toggle.colors, c.style.input);
-                const Color border = in.enabled ? (in.hovered ? c.style.accent : c.style.panelBorder) : c.style.textDisabled;
+                const Color textColor = in.enabled ? pick(toggle.textColor, c.style.text) : c.style.textDisabled;
                 const float bw = std::min(c.style.borderWidth, box * 0.25f);
-                if (toggle.radio) {
-                    c.circle(Slot::ToggleBorder, boxPos, glm::vec2(box), 0, border);
-                    c.circle(Slot::ToggleFill, boxPos + glm::vec2(bw), glm::vec2(box - bw * 2.0f), 1, stateColor(colors, in));
-                    const float mark = box * 0.5f;
-                    if (toggle.checked) c.circle(Slot::ToggleMark, boxPos + glm::vec2((box - mark) * 0.5f), glm::vec2(mark), 2, c.style.accent);
-                    else c.hide(Slot::ToggleMark);
-                } else {
-                    c.bordered(Slot::ToggleBorder, Slot::ToggleFill, boxPos, glm::vec2(box), 0, bw, border, stateColor(colors, in));
-                    const float mark = box * 0.5f;
-                    if (toggle.checked) c.rect(Slot::ToggleMark, boxPos + glm::vec2((box - mark) * 0.5f), glm::vec2(mark), 2, c.style.accent);
-                    else c.hide(Slot::ToggleMark);
+                const glm::vec2 textPos(box + 10.0f, std::max(0.0f, (c.size.y - fs) * 0.5f));
+                if (!c.sdf) {
+                    const Color border = in.enabled ? (in.hovered ? c.style.accent : c.style.panelBorder) : c.style.textDisabled;
+                    if (toggle.radio) {
+                        c.circle(Slot::ToggleBorder, boxPos, glm::vec2(box), 0, border);
+                        c.circle(Slot::ToggleFill, boxPos + glm::vec2(bw), glm::vec2(box - bw * 2.0f), 1, stateColor(colors, in));
+                        const float mark = box * 0.5f;
+                        if (toggle.checked) c.circle(Slot::ToggleMark, boxPos + glm::vec2((box - mark) * 0.5f), glm::vec2(mark), 2, c.style.accent);
+                        else c.hide(Slot::ToggleMark);
+                    } else {
+                        c.bordered(Slot::ToggleBorder, Slot::ToggleFill, boxPos, glm::vec2(box), 0, bw, border, stateColor(colors, in));
+                        const float mark = box * 0.5f;
+                        if (toggle.checked) c.rect(Slot::ToggleMark, boxPos + glm::vec2((box - mark) * 0.5f), glm::vec2(mark), 2, c.style.accent);
+                        else c.hide(Slot::ToggleMark);
+                    }
+                    c.text(Slot::ToggleText, textPos, 3, toggle.text, textColor, fs, TextAlign::Left);
+                    return;
                 }
-                c.text(Slot::ToggleText, {box + 10.0f, std::max(0.0f, (c.size.y - fs) * 0.5f)}, 3, toggle.text,
-                       in.enabled ? pick(toggle.textColor, c.style.text) : c.style.textDisabled, fs, TextAlign::Left);
+                const float radius = toggle.radio ? box * 0.5f : std::min(c.style.radius * 0.7f, box * 0.5f);
+                const float lit = std::max(in.enabled ? in.hoverT : 0.0f, toggle.checked && in.enabled ? 1.0f : 0.0f);
+                c.soft(Slot::ToggleGlow, boxPos, glm::vec2(box), 0, radius, 7.0f, {0.0f, 0.0f}, withAlpha(c.style.accent, toggle.checked && in.enabled ? 0.45f : 0.0f));
+                Ctx::BoxDesc body;
+                body.radius = radius;
+                body.borderWidth = bw;
+                body.border = in.enabled ? lerpColor(c.style.panelBorder, c.style.accent, lit) : c.style.textDisabled;
+                body.fill = lerpColor(stateMix(colors, in), darker(c.style.accent, 0.35f), toggle.checked && in.enabled ? 1.0f : 0.0f);
+                body.gradient = -0.18f;                                      // inset
+                c.box(Slot::ToggleBorder, Slot::ToggleFill, boxPos, glm::vec2(box), 0, body);
+                if (toggle.checked) {
+                    const Color mark = in.enabled ? lerpColor(c.style.accent, Color(1.0f, 0.95f, 0.75f, 1.0f), 0.35f) : c.style.textDisabled;
+                    if (toggle.radio) {
+                        const float dot = box * 0.46f;
+                        c.circle(Slot::ToggleMark, boxPos + glm::vec2((box - dot) * 0.5f), glm::vec2(dot), 3, mark);
+                    } else {
+                        c.icon(Slot::ToggleMark, boxPos, glm::vec2(box), 3, Icon::Check, std::max(2.2f, box * 0.14f), mark);
+                    }
+                } else {
+                    c.hide(Slot::ToggleMark);
+                }
+                c.text(Slot::ToggleText, textPos, 4, toggle.text, textColor, fs, TextAlign::Left);
             }
 
             // ---- Slider -----------------------------------------------------------------------------------------------
@@ -122,20 +257,52 @@ namespace Lu {
                 const float v = std::clamp(slider.value, 0.0f, 1.0f);
                 const float along = horizontal ? c.size.x : c.size.y;
                 const float center = k * 0.5f + v * std::max(0.0f, along - k);
-                const Color knob = (in.enabled && (in.pressed || in.hovered)) ? c.style.accent : pick(slider.knobColor, c.style.knob);
-                if (horizontal) {
-                    const float ty = (c.size.y - tt) * 0.5f;
-                    c.rect(Slot::SliderBorder, {0.0f, ty}, {c.size.x, tt}, 0, in.enabled ? c.style.panelBorder : c.style.textDisabled);
-                    c.rect(Slot::SliderTrack, {1.0f, ty + 1.0f}, {std::max(0.0f, c.size.x - 2.0f), std::max(0.0f, tt - 2.0f)}, 1, c.style.track);
-                    c.rect(Slot::SliderFill, {1.0f, ty + 1.0f}, {std::max(0.0f, center - 1.0f), std::max(0.0f, tt - 2.0f)}, 2, pick(slider.fillColor, c.style.accent));
-                    c.circle(Slot::SliderKnob, {center - k * 0.5f, (c.size.y - k) * 0.5f}, glm::vec2(k), 3, knob);
-                } else {
-                    const float tx = (c.size.x - tt) * 0.5f;
-                    c.rect(Slot::SliderBorder, {tx, 0.0f}, {tt, c.size.y}, 0, in.enabled ? c.style.panelBorder : c.style.textDisabled);
-                    c.rect(Slot::SliderTrack, {tx + 1.0f, 1.0f}, {std::max(0.0f, tt - 2.0f), std::max(0.0f, c.size.y - 2.0f)}, 1, c.style.track);
-                    c.rect(Slot::SliderFill, {tx + 1.0f, 1.0f}, {std::max(0.0f, tt - 2.0f), std::max(0.0f, center - 1.0f)}, 2, pick(slider.fillColor, c.style.accent));
-                    c.circle(Slot::SliderKnob, {(c.size.x - k) * 0.5f, center - k * 0.5f}, glm::vec2(k), 3, knob);
+                if (!c.sdf) {
+                    const Color knob = (in.enabled && (in.pressed || in.hovered)) ? c.style.accent : pick(slider.knobColor, c.style.knob);
+                    if (horizontal) {
+                        const float ty = (c.size.y - tt) * 0.5f;
+                        c.rect(Slot::SliderBorder, {0.0f, ty}, {c.size.x, tt}, 0, in.enabled ? c.style.panelBorder : c.style.textDisabled);
+                        c.rect(Slot::SliderTrack, {1.0f, ty + 1.0f}, {std::max(0.0f, c.size.x - 2.0f), std::max(0.0f, tt - 2.0f)}, 1, c.style.track);
+                        c.rect(Slot::SliderFill, {1.0f, ty + 1.0f}, {std::max(0.0f, center - 1.0f), std::max(0.0f, tt - 2.0f)}, 2, pick(slider.fillColor, c.style.accent));
+                        c.circle(Slot::SliderKnob, {center - k * 0.5f, (c.size.y - k) * 0.5f}, glm::vec2(k), 3, knob);
+                    } else {
+                        const float tx = (c.size.x - tt) * 0.5f;
+                        c.rect(Slot::SliderBorder, {tx, 0.0f}, {tt, c.size.y}, 0, in.enabled ? c.style.panelBorder : c.style.textDisabled);
+                        c.rect(Slot::SliderTrack, {tx + 1.0f, 1.0f}, {std::max(0.0f, tt - 2.0f), std::max(0.0f, c.size.y - 2.0f)}, 1, c.style.track);
+                        c.rect(Slot::SliderFill, {tx + 1.0f, 1.0f}, {std::max(0.0f, tt - 2.0f), std::max(0.0f, center - 1.0f)}, 2, pick(slider.fillColor, c.style.accent));
+                        c.circle(Slot::SliderKnob, {(c.size.x - k) * 0.5f, center - k * 0.5f}, glm::vec2(k), 3, knob);
+                    }
+                    return;
                 }
+                const float lit = in.enabled ? std::max(in.hoverT, in.pressT) : 0.0f;
+                const float bw = 1.5f;
+                const glm::vec2 trackPos = horizontal ? glm::vec2(0.0f, (c.size.y - tt) * 0.5f) : glm::vec2((c.size.x - tt) * 0.5f, 0.0f);
+                const glm::vec2 trackSize = horizontal ? glm::vec2(c.size.x, tt) : glm::vec2(tt, c.size.y);
+                Ctx::BoxDesc track;
+                track.radius = tt * 0.5f;
+                track.borderWidth = bw;
+                track.border = in.enabled ? darker(c.style.panelBorder, 0.9f) : c.style.textDisabled;
+                track.fill = c.style.track;
+                track.gradient = -0.45f;
+                c.box(Slot::SliderBorder, Slot::SliderTrack, trackPos, trackSize, 0, track);
+
+                Ctx::BoxDesc fill;
+                fill.radius = std::max(0.0f, tt * 0.5f - bw);
+                fill.fill = in.enabled ? pick(slider.fillColor, c.style.accent) : c.style.textDisabled;
+                fill.gradient = 0.35f;
+                const float fillLength = std::max(0.0f, center - bw);
+                if (horizontal) c.box(Slot::SliderFill, Slot::SliderFill, trackPos + glm::vec2(bw), glm::vec2(fillLength, tt - bw * 2.0f), 1, fill);
+                else c.box(Slot::SliderFill, Slot::SliderFill, trackPos + glm::vec2(bw), glm::vec2(tt - bw * 2.0f, fillLength), 1, fill);
+
+                const glm::vec2 knobPos = horizontal ? glm::vec2(center - k * 0.5f, (c.size.y - k) * 0.5f) : glm::vec2((c.size.x - k) * 0.5f, center - k * 0.5f);
+                c.soft(Slot::SliderKnobShadow, knobPos, glm::vec2(k), 3, k * 0.5f, 5.0f, {0.0f, 2.0f}, withAlpha(c.style.shadowColor, in.enabled ? 0.9f : 0.0f));
+                Ctx::BoxDesc knob;
+                knob.radius = k * 0.5f;
+                knob.borderWidth = 2.0f;
+                knob.border = in.enabled ? lerpColor(c.style.panelBorder, c.style.accent, lit) : c.style.textDisabled;
+                knob.fill = in.enabled ? pick(slider.knobColor, c.style.knob) : darker(c.style.knob, 0.5f);
+                knob.gradient = 0.30f;
+                c.box(Slot::SliderKnob, Slot::SliderKnob, knobPos, glm::vec2(k), 4, knob);
             }
 
             // ---- ScrollBar --------------------------------------------------------------------------------------------
@@ -165,15 +332,40 @@ namespace Lu {
                 const Interact in = interactOf(c.e);
                 const ScrollBarMetrics m = scrollBarMetrics(bar, c.size);
                 const float thickness = (vertical ? c.size.x : c.size.y) - bar.padding * 2.0f;
-                const Color thumb = (in.enabled && (in.pressed || in.hovered)) ? c.style.accent : pick(bar.thumbColor, c.style.knob);
-
-                c.roundedRect(Slot::BarTrack0, {0.0f, 0.0f}, c.size, 0, bar.radius + bar.padding, pick(bar.trackColor, c.style.track));
-                if (thickness > 0.0f && m.thumbLength > 0.0f) {
-                    const glm::vec2 position = vertical ? glm::vec2(bar.padding, m.thumbStart) : glm::vec2(m.thumbStart, bar.padding);
-                    const glm::vec2 size = vertical ? glm::vec2(thickness, m.thumbLength) : glm::vec2(m.thumbLength, thickness);
-                    c.roundedRect(Slot::BarThumb0, position, size, 2, bar.radius, thumb);
+                const bool haveThumb = thickness > 0.0f && m.thumbLength > 0.0f;
+                const glm::vec2 thumbPos = vertical ? glm::vec2(bar.padding, m.thumbStart) : glm::vec2(m.thumbStart, bar.padding);
+                const glm::vec2 thumbSize = vertical ? glm::vec2(thickness, m.thumbLength) : glm::vec2(m.thumbLength, thickness);
+                if (!c.sdf) {
+                    const Color thumb = (in.enabled && (in.pressed || in.hovered)) ? c.style.accent : pick(bar.thumbColor, c.style.knob);
+                    c.roundedRect(Slot::BarTrack0, {0.0f, 0.0f}, c.size, 0, bar.radius + bar.padding, pick(bar.trackColor, c.style.track));
+                    if (haveThumb) {
+                        c.roundedRect(Slot::BarThumb0, thumbPos, thumbSize, 2, bar.radius, thumb);
+                    } else {
+                        for (int i = 0; i < 7; ++i) c.hide(static_cast<Slot>(static_cast<int>(Slot::BarThumb0) + i));
+                    }
+                    return;
+                }
+                for (int i = 1; i < 7; ++i) {      // (flat look slots)
+                    c.hide(static_cast<Slot>(static_cast<int>(Slot::BarTrack0) + i));
+                    c.hide(static_cast<Slot>(static_cast<int>(Slot::BarThumb0) + i));
+                }
+                const float lit = in.enabled ? std::max(in.hoverT, in.pressT) : 0.0f;
+                Ctx::BoxDesc track;
+                track.radius = std::min(bar.radius + bar.padding, std::min(c.size.x, c.size.y) * 0.5f);
+                track.borderWidth = 1.0f;
+                track.border = darker(c.style.panelBorder, 0.6f);
+                track.fill = pick(bar.trackColor, c.style.track);
+                track.gradient = -0.30f;
+                c.box(Slot::BarTrack0, Slot::BarTrack0, {0.0f, 0.0f}, c.size, 0, track);
+                if (haveThumb) {
+                    Ctx::BoxDesc thumb;
+                    thumb.radius = std::min(bar.radius, std::min(thumbSize.x, thumbSize.y) * 0.5f);
+                    // idle: the border gold, hovered / dragged: the accent
+                    thumb.fill = lerpColor(isSet(bar.thumbColor) ? bar.thumbColor : darker(c.style.panelBorder, 0.9f), c.style.accent, lit);
+                    thumb.gradient = 0.28f;
+                    c.box(Slot::BarThumb0, Slot::BarThumb0, thumbPos, thumbSize, 2, thumb);
                 } else {
-                    for (int i = 0; i < 7; ++i) c.hide(static_cast<Slot>(static_cast<int>(Slot::BarThumb0) + i));
+                    c.hide(Slot::BarThumb0);
                 }
             }
 
@@ -198,19 +390,35 @@ namespace Lu {
                 c.defaultSize({240.0f, 40.0f});
                 const Interact in = interactOf(c.e);
                 const ColorSet colors = pickSet(t.colors, c.style.input);
-                Color fill = colors.normal;
-                if (!in.enabled) fill = colors.disabled;
-                else if (t.focused) fill = colors.pressed;
-                else if (in.hovered) fill = colors.hover;
                 const float fs = c.fontSizeOr(t.fontSize);
-                c.bordered(Slot::InputBorder, Slot::InputFill, {0.0f, 0.0f}, c.size, 0, c.style.borderWidth,
-                           t.focused ? c.style.accent : (in.enabled ? c.style.panelBorder : c.style.textDisabled), fill);
                 const bool showPlaceholder = t.text.empty() && !t.focused;
                 const std::string shown = showPlaceholder ? t.placeholder
                                                          : displayText(t, (c.size.x - 20.0f) / (fs * kCharWidth));
                 const Color color = !in.enabled ? c.style.textDisabled
                                   : showPlaceholder ? pick(t.placeholderColor, c.style.textDim) : pick(t.textColor, c.style.text);
-                c.text(Slot::InputText, {10.0f, std::max(0.0f, (c.size.y - fs) * 0.5f)}, 3, shown, color, fs, TextAlign::Left);
+                const glm::vec2 textPos(10.0f, std::max(0.0f, (c.size.y - fs) * 0.5f));
+                if (!c.sdf) {
+                    Color fill = colors.normal;
+                    if (!in.enabled) fill = colors.disabled;
+                    else if (t.focused) fill = colors.pressed;
+                    else if (in.hovered) fill = colors.hover;
+                    c.bordered(Slot::InputBorder, Slot::InputFill, {0.0f, 0.0f}, c.size, 0, c.style.borderWidth,
+                               t.focused ? c.style.accent : (in.enabled ? c.style.panelBorder : c.style.textDisabled), fill);
+                    c.text(Slot::InputText, textPos, 3, shown, color, fs, TextAlign::Left);
+                    return;
+                }
+                const float radius = std::min(c.style.radius, c.size.y * 0.5f);
+                const float lit = in.enabled ? std::max(in.hoverT, t.focused ? 1.0f : 0.0f) : 0.0f;
+                c.soft(Slot::InputGlow, {0.0f, 0.0f}, c.size, 0, radius, 9.0f, {0.0f, 0.0f}, withAlpha(c.style.accent, t.focused && in.enabled ? 0.38f : 0.0f));
+                Ctx::BoxDesc box;
+                box.radius = radius;
+                box.borderWidth = c.style.borderWidth;
+                box.border = in.enabled ? lerpColor(c.style.panelBorder, c.style.accent, t.focused ? 1.0f : in.hoverT * 0.6f) : c.style.textDisabled;
+                box.fill = !in.enabled ? colors.disabled : lerpColor(colors.normal, colors.pressed, t.focused ? 1.0f : in.hoverT * 0.5f);
+                box.gradient = -0.20f;                                       // inset: darker at the top
+                c.box(Slot::InputBorder, Slot::InputFill, {0.0f, 0.0f}, c.size, 0, box);
+                (void)lit;
+                c.text(Slot::InputText, textPos, 3, shown, color, fs, TextAlign::Left);
             }
 
             // =====================================================================================================

@@ -36,8 +36,24 @@ namespace Lu {
                 const float th = std::min(window.titleHeight, c.size.y);
                 const float bw = c.style.borderWidth;
                 const float fs = c.fontSizeOr(window.fontSize);
-                c.rect(Slot::WindowTitleBar, {bw, bw}, {std::max(0.0f, c.size.x - bw * 2.0f), std::max(0.0f, th - bw)}, 2, c.style.titleBar);
-                c.text(Slot::WindowTitleText, {14.0f, std::max(0.0f, (th - fs) * 0.5f)}, 3, window.title, c.style.accent, fs, TextAlign::Left);
+                if (c.sdf) {
+                    // (the body, border, shadow of the window are drawn by its Panel)
+                    const float radius = std::max(0.0f, c.style.radius * 1.5f - bw);
+                    Ctx::BoxDesc bar;
+                    bar.radius = radius;
+                    bar.fill = c.style.titleBar;
+                    bar.gradient = 0.28f;
+                    bar.kind = 7;                                              // only the top corners are rounded
+                    c.box(Slot::WindowTitleBar, Slot::WindowTitleBar, {bw, bw}, {std::max(0.0f, c.size.x - bw * 2.0f), std::max(0.0f, th - bw)}, 2, bar);
+                    Ctx::BoxDesc line;
+                    line.fill = withAlpha(c.style.accent, 0.55f);
+                    c.box(Slot::WindowSeparator, Slot::WindowSeparator, {bw, th}, {std::max(0.0f, c.size.x - bw * 2.0f), 1.0f}, 3, line);
+                    c.textShadowed(Slot::WindowTitleText, Slot::WindowTitleShadow, {16.0f, std::max(0.0f, (th - fs) * 0.5f)}, 6, window.title,
+                                   lerpColor(c.style.accent, Color(1.0f, 0.95f, 0.8f, 1.0f), 0.4f), fs, TextAlign::Left);
+                } else {
+                    c.rect(Slot::WindowTitleBar, {bw, bw}, {std::max(0.0f, c.size.x - bw * 2.0f), std::max(0.0f, th - bw)}, 2, c.style.titleBar);
+                    c.text(Slot::WindowTitleText, {14.0f, std::max(0.0f, (th - fs) * 0.5f)}, 3, window.title, c.style.accent, fs, TextAlign::Left);
+                }
 
                 const float closeSize = std::max(8.0f, th - 12.0f);
                 bool created = false;
@@ -45,13 +61,14 @@ namespace Lu {
                     flecs::entity close = c.ownedChild(Child::WindowClose, created);
                     Node node;
                     node.size = {closeSize, closeSize};
-                    node.layer = 4;
+                    node.layer = 6;
                     node.inLayout = false;
                     const glm::vec2 pos(c.size.x - closeSize - 8.0f, (th - closeSize) * 0.5f);
                     if (created) {
                         Transform2D t; t.position = pos;
                         Button button;
                         button.text = "x";
+                        button.icon = Icon::Cross;       // (SDF look: a cross instead of the letter)
                         button.onClick = [](flecs::entity self) {
                             flecs::entity win = self.parent();
                             if (!win.id() || !win.has<Window>()) return;
@@ -73,7 +90,7 @@ namespace Lu {
                     flecs::entity drag = c.ownedChild(Child::WindowDrag, created);
                     Node node;
                     node.size = {std::max(0.0f, c.size.x - (window.closable ? closeSize + 16.0f : 0.0f)), th};
-                    node.layer = 3;
+                    node.layer = 4;
                     node.inLayout = false;
                     if (created) {
                         Draggable d;
@@ -95,13 +112,33 @@ namespace Lu {
                 const Interact in = interactOf(c.e);
                 const float fs = c.fontSizeOr(dd.fontSize);
                 const bool valid = dd.selected >= 0 && dd.selected < static_cast<int>(dd.options.size());
-                c.bordered(Slot::DropdownBorder, Slot::DropdownFill, {0.0f, 0.0f}, c.size, 0, c.style.borderWidth,
-                           (dd.open || in.hovered) ? c.style.accent : (in.enabled ? c.style.panelBorder : c.style.textDisabled),
-                           stateColor(c.style.input, in));
                 const float ty = std::max(0.0f, (c.size.y - fs) * 0.5f);
-                c.text(Slot::DropdownText, {10.0f, ty}, 3, valid ? dd.options[static_cast<size_t>(dd.selected)] : dd.placeholder,
-                       !in.enabled ? c.style.textDisabled : valid ? c.style.text : c.style.textDim, fs, TextAlign::Left);
-                c.text(Slot::DropdownArrow, {c.size.x - 16.0f, ty}, 3, dd.open ? "^" : "v", c.style.accent, fs, TextAlign::Center);
+                const Color textColor = !in.enabled ? c.style.textDisabled : valid ? c.style.text : c.style.textDim;
+                const std::string label = valid ? dd.options[static_cast<size_t>(dd.selected)] : dd.placeholder;
+                if (!c.sdf) {
+                    c.bordered(Slot::DropdownBorder, Slot::DropdownFill, {0.0f, 0.0f}, c.size, 0, c.style.borderWidth,
+                               (dd.open || in.hovered) ? c.style.accent : (in.enabled ? c.style.panelBorder : c.style.textDisabled),
+                               stateColor(c.style.input, in));
+                    c.text(Slot::DropdownText, {10.0f, ty}, 3, label, textColor, fs, TextAlign::Left);
+                    c.text(Slot::DropdownArrow, {c.size.x - 16.0f, ty}, 3, dd.open ? "^" : "v", c.style.accent, fs, TextAlign::Center);
+                } else {
+                    const float radius = std::min(c.style.radius, c.size.y * 0.5f);
+                    const float lit = std::max(in.enabled ? in.hoverT : 0.0f, dd.open ? 1.0f : 0.0f);
+                    c.soft(Slot::DropdownShadow, {0.0f, 0.0f}, c.size, 0, radius, 6.0f, {0.0f, 2.0f}, withAlpha(c.style.shadowColor, in.enabled ? 0.8f : 0.0f));
+                    c.soft(Slot::DropdownGlow, {0.0f, 0.0f}, c.size, 0, radius, 10.0f, {0.0f, 0.0f}, withAlpha(c.style.accent, 0.35f * lit));
+                    Ctx::BoxDesc box;
+                    box.radius = radius;
+                    box.borderWidth = c.style.borderWidth;
+                    box.border = in.enabled ? lerpColor(c.style.panelBorder, c.style.accent, lit) : c.style.textDisabled;
+                    box.fill = lerpColor(c.style.input.normal, c.style.input.hover, in.enabled ? in.hoverT : 0.0f);
+                    if (!in.enabled) box.fill = c.style.input.disabled;
+                    box.gradient = -0.18f;
+                    c.box(Slot::DropdownBorder, Slot::DropdownFill, {0.0f, 0.0f}, c.size, 0, box);
+                    c.text(Slot::DropdownText, {12.0f, ty}, 4, label, textColor, fs, TextAlign::Left);
+                    const float s = std::min(c.size.x, c.size.y) * 0.46f;
+                    c.icon(Slot::DropdownIcon, {c.size.x - s - 12.0f, (c.size.y - s) * 0.5f}, glm::vec2(s), 4,
+                           dd.open ? Icon::ChevronUp : Icon::ChevronDown, 2.4f, in.enabled ? c.style.accent : c.style.textDisabled);
+                }
 
                 // the open list: one Button entity per option (children of the dropdown, above everything near it)
                 if (!dd.open || !c.visible) {

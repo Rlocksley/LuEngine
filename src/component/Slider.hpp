@@ -12,7 +12,7 @@ namespace Lu {
             float value{0.0f};
             Orientation orientation{Orientation::Horizontal};
             float step{0.0f};            // > 0: value snaps to multiples of step (e.g. 0.1)
-            float trackThickness{6.0f};
+            float trackThickness{8.0f};
             float knobSize{20.0f};
             Color fillColor{kUnset};     // Style::accent
             Color knobColor{kUnset};     // Style::knob

@@ -10,6 +10,9 @@ namespace Lu {
             Color color{kUnset};         // fill (Style::panel)
             Color borderColor{kUnset};   // Style::panelBorder
             float borderWidth{-1.0f};    // < 0: Style::borderWidth, 0: no border
+            float radius{-1.0f};         // SDF look: corner radius, < 0: Style::radius
+            bool shadow{false};          // SDF look: drop shadow (windows have one anyway)
+            bool frame{false};           // SDF look: a second thin line inside of the border (windows have one anyway)
         };
 
         // Text. Node::size follows the text (estimated) when autoSize is on.
@@ -21,6 +24,7 @@ namespace Lu {
             bool verticalCenter{false};  // center the first line vertically inside Node::size
             float maxWidth{0.0f};        // > 0: word wrap
             bool autoSize{true};
+            bool shadow{false};          // SDF look: 1 pixel shadow (Style::textShadow)
         };
 
         // Rectangle with a texture (icon, portrait, ...). Texture = App::registerTexture entity.
@@ -28,6 +32,7 @@ namespace Lu {
             flecs::entity texture{};
             Color tint{1.0f, 1.0f, 1.0f, 1.0f};
             glm::vec4 uvRect{0.0f, 0.0f, 1.0f, 1.0f};
+            float radius{0.0f};          // SDF look: rounded corners
         };
 
         // Progress / health / production bar. value = 0..1.

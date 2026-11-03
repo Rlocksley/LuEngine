@@ -37,6 +37,10 @@ namespace Lu{
         //   dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
         VkBlendFactor srcColorBlendFactor{VK_BLEND_FACTOR_SRC_ALPHA};
         VkBlendFactor dstColorBlendFactor{VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA};
+        // Alpha to coverage (needs MSAA): the alpha of the fragment shader output decides how many of the samples of the pixel
+        // are covered. Anti-aliased edges / soft transitions that are independent of the draw order, with depth writes and
+        // without blending (e.g. the SDF GUI shapes of shader/mesh2d_ui.frag). Usually together with blendEnable = false.
+        bool alphaToCoverageEnable{false};
     };
 
     // Describes a font that is rasterized with FreeType into one atlas texture (App::registerFont).

@@ -46,8 +46,18 @@ namespace Lu {
 
             // The GPU can clip (mesh2d_clip.* / font_clip.* pipelines are registered).
             inline bool canClip(const Style& style) {
-                return style.clipMeshPipeline.id() != 0 && style.clipFontPipeline.id() != 0;
+                const bool meshes = style.shapePipeline.id() != 0 || style.clipMeshPipeline.id() != 0;   // mesh2d_ui.* clips too
+                return meshes && style.clipFontPipeline.id() != 0;
             }
+
+            // Shapes are drawn with SDFs (mesh2d_ui.*): rounded corners, borders, gradients, icons, shadows.
+            inline bool useSdf(const Style& style) {
+                return style.shapePipeline.id() != 0 && style.rect.id() != 0;
+            }
+
+            inline Color withAlpha(const Color& c, float alpha) { return Color(c.r, c.g, c.b, c.a * alpha); }
+            inline Color lerpColor(const Color& a, const Color& b, float t) { return a + (b - a) * std::clamp(t, 0.0f, 1.0f); }
+            inline Color darker(const Color& c, float f) { return Color(c.r * f, c.g * f, c.b * f, c.a); }
 
             // The clip rectangle entity (a Transform2D + Transform2DGpu that is created by a ScrollView) that clips the
             // parts of `e`: the nearest ScrollView ancestor with clip on, if its clip entity is ready. 0 = no clipping.
@@ -183,6 +193,8 @@ namespace Lu {
                 fill(style.fontPipeline, "FontPipe::Basic");
                 fill(style.clipMeshPipeline, "Mesh2DPipe::UIClip");
                 fill(style.clipFontPipeline, "FontPipe::UIClip");
+                fill(style.shapePipeline, "Mesh2DPipe::UI");
+                fill(style.softPipeline, "Mesh2DPipe::UISoft");
                 return style;
             }
 
@@ -230,12 +242,24 @@ namespace Lu {
                 bool partsChanged{false};
                 bool nodeChanged{false};
                 flecs::entity_t clip{0};     // clip rectangle of the ScrollView this widget is in (0 = none)
+                bool sdf{false};             // SDF look (see UICore.hpp)
+
+                // Shape of the SDF look, one rounded rectangle with a border and a gradient.
+                struct BoxDesc {
+                    float radius{0.0f};
+                    float borderWidth{0.0f};
+                    Color border{0.0f, 0.0f, 0.0f, 0.0f};
+                    Color fill{1.0f, 1.0f, 1.0f, 1.0f};
+                    float gradient{0.0f};    // -1 .. 1, lighter (+) / darker (-) at the top
+                    int kind{0};             // 0 all corners rounded, 7 only the top corners, 8 only the bottom corners
+                };
 
                 explicit Ctx(flecs::entity entity) : e(entity), w(entity.world()) {
                     style = resolveStyle(e);
                     node = e.get<Node>();
                     size = node.size;
                     visible = !isHidden(e);
+                    sdf = useSdf(style);
                     if (canClip(style)) clip = findClip(e);
                     if (const Parts* p = e.try_get<Parts>()) parts = *p;
                 }
@@ -301,7 +325,8 @@ namespace Lu {
 
                 // everything that is drawn inside a clipping ScrollView uses the clipping pipelines + the clip rectangle
                 void applyClip(Mesh2D& mesh) const {
-                    mesh.pipeline = clip != 0 ? style.clipMeshPipeline : style.meshPipeline;
+                    if (sdf) mesh.pipeline = style.shapePipeline;           // mesh2d_ui.* does the clipping itself
+                    else mesh.pipeline = clip != 0 ? style.clipMeshPipeline : style.meshPipeline;
                     if (clip != 0) mesh.clip = w.entity(clip);
                 }
                 void applyClip(Text& text) const {
@@ -318,6 +343,10 @@ namespace Lu {
                 }
 
                 void circle(Slot slot, glm::vec2 position, glm::vec2 diameter, uint32_t layer, const Color& color) {
+                    if (sdf) {      // a rounded box with radius = half size (the unit circle mesh does not fit the SDF shader)
+                        sdfPart(slot, position, diameter, layer, color, Color(0.0f), glm::vec4(std::min(diameter.x, diameter.y) * 0.5f, 0.0f, 0.0f, 0.0f), color.a < 0.99f);
+                        return;
+                    }
                     Mesh2D mesh;
                     mesh.mesh = style.circle;
                     applyClip(mesh);
@@ -332,6 +361,7 @@ namespace Lu {
                     mesh.texture = image.texture;
                     mesh.color = image.tint;
                     mesh.uvRect = image.uvRect;
+                    mesh.params = glm::vec4(std::min(image.radius, std::min(rectSize.x, rectSize.y) * 0.5f), 0.0f, 0.0f, 0.0f);   // (SDF look: rounded corners)
                     part(slot, position, rectSize, layer, mesh);
                 }
 
@@ -359,6 +389,74 @@ namespace Lu {
                         hide(border);
                         rect(fill, position, rectSize, layer + 1, fillColor);
                     }
+                }
+
+                // ---- SDF look -----------------------------------------------------------------------------------------------
+                // One part drawn by mesh2d_ui.*: color = fill, border = border color (uvRect), params = radius, border width /
+                // margin, softness, kind * 4 + gradient.
+                void sdfPart(Slot slot, glm::vec2 position, glm::vec2 partSize, uint32_t layer, const Color& color,
+                             const Color& border, const glm::vec4& params, bool soft) {
+                    Mesh2D mesh;
+                    mesh.mesh = style.rect;
+                    // translucent shapes need blending (alpha to coverage would dither them): the blended pipeline draws after
+                    // the opaque shapes, with depth test but without depth write
+                    mesh.pipeline = (soft && style.softPipeline.id() != 0) ? style.softPipeline : style.shapePipeline;
+                    mesh.color = color;
+                    mesh.uvRect = border;
+                    mesh.params = params;
+                    if (clip != 0) mesh.clip = w.entity(clip);
+                    part(slot, position, glm::max(partSize, glm::vec2(0.0f)), layer, mesh);
+                }
+
+                // A rounded rectangle with border and gradient. SDF look: one part (`body`) at layer + 1, `extra` is not used.
+                // Flat look: the border (`body`, layer) and the fill (`extra`, layer + 1) are two rectangles.
+                void box(Slot body, Slot extra, glm::vec2 position, glm::vec2 boxSize, uint32_t layer, const BoxDesc& b) {
+                    if (sdf) {
+                        const float radius = std::min(b.radius, std::min(boxSize.x, boxSize.y) * 0.5f);
+                        const bool translucent = b.fill.a < 0.99f || (b.borderWidth > 0.0f && b.border.a > 0.003f && b.border.a < 0.99f);
+                        sdfPart(body, position, boxSize, layer + 1, b.fill, b.border,
+                                glm::vec4(radius, b.borderWidth, 0.0f, static_cast<float>(b.kind) * 4.0f + std::clamp(b.gradient, -1.0f, 1.0f)), translucent);
+                        if (extra != body) hide(extra);
+                    } else {
+                        bordered(body, extra, position, boxSize, layer, b.borderWidth, b.border, b.fill);
+                    }
+                }
+
+                // 1 pixel (or `width`) outline inside of a rectangle, e.g. the light inner edge of a panel (SDF look only).
+                void ring(Slot slot, glm::vec2 position, glm::vec2 ringSize, uint32_t layer, float radius, float width, const Color& color) {
+                    if (!sdf || color.a <= 0.003f) { hide(slot); return; }
+                    BoxDesc b;
+                    b.radius = radius;
+                    b.borderWidth = width;
+                    b.border = color;
+                    b.fill = Color(0.0f, 0.0f, 0.0f, 0.0f);
+                    sdfPart(slot, position, ringSize, layer, b.fill, b.border, glm::vec4(std::min(radius, std::min(ringSize.x, ringSize.y) * 0.5f), width, 0.0f, 0.0f), true);
+                }
+
+                // Soft drop shadow / glow of a rounded rectangle (SDF look + Mesh2DPipe::UISoft only). `blur` = pixels of falloff.
+                void soft(Slot slot, glm::vec2 position, glm::vec2 casterSize, uint32_t layer, float radius, float blur,
+                          glm::vec2 offset, const Color& color) {
+                    if (!sdf || style.softPipeline.id() == 0 || color.a <= 0.003f || blur <= 0.0f) { hide(slot); return; }
+                    const float margin = blur + 2.0f;
+                    sdfPart(slot, position + offset - glm::vec2(margin), casterSize + glm::vec2(margin * 2.0f), layer, color, Color(0.0f),
+                            glm::vec4(std::min(radius, std::min(casterSize.x, casterSize.y) * 0.5f), margin, blur, 0.0f), true);
+                }
+
+                void icon(Slot slot, glm::vec2 position, glm::vec2 iconSize, uint32_t layer, Icon which, float stroke, const Color& color) {
+                    if (!sdf || which == Icon::None) { hide(slot); return; }
+                    sdfPart(slot, position, iconSize, layer, color, Color(0.0f),
+                            glm::vec4(0.0f, stroke, 0.0f, static_cast<float>(static_cast<int>(which)) * 4.0f), color.a < 0.99f);
+                }
+
+                // Text with a 1 pixel shadow (SDF look): the shadow is a second text one layer below.
+                void textShadowed(Slot main, Slot shadow, glm::vec2 position, uint32_t layer, const std::string& str, const Color& color,
+                                  float fontSize, TextAlign align, float maxWidth = 0.0f) {
+                    if (sdf && style.textShadow.a > 0.003f && layer > 0) {
+                        text(shadow, position + glm::vec2(0.0f, 1.0f), layer - 1, str, withAlpha(style.textShadow, color.a), fontSize, align, maxWidth);
+                    } else {
+                        hide(shadow);
+                    }
+                    text(main, position, layer, str, color, fontSize, align, maxWidth);
                 }
 
                 // Rounded rectangle from 7 parts (first .. first+6): a body, a top and a bottom bar and 4 corner circles.
