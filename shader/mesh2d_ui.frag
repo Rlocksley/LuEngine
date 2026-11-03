@@ -5,6 +5,7 @@
 //
 //   color   fill color. Untextured shapes: the top of the gradient. Textured shapes: tint (multiplied with the texture)
 //   uvRect  untextured shapes: BORDER COLOR (rgba).  textured shapes: the uv rectangle, no border
+//   (all colors are LINEAR: the swapchain is sRGB and the GPU encodes on write; the UI module converts its sRGB colors)
 //   params  x  corner radius in pixels
 //           y  border width in pixels (shadows / glows: the margin = how much smaller the shadow-casting rectangle is than the
 //              mesh, so that the blur has room around it; icons: stroke width)
@@ -62,6 +63,14 @@ float noise(vec2 fragCoord) {
     return fract(52.9829189 * fract(dot(fragCoord, vec2(0.06711056, 0.00583715))));
 }
 
+// The output is LINEAR (the swapchain is sRGB, the GPU encodes on write). One 8 bit step of the result is 1/255 in sRGB, so the
+// dither has to be added in sRGB space: a step of 1/255 in linear space would be up to 12 steps in the dark colors.
+vec3 ditherLinear(vec3 linearColor, float n) {
+    vec3 s = pow(max(linearColor, vec3(0.0)), vec3(1.0 / 2.2));
+    s = s + vec3((n - 0.5) / 255.0);
+    return pow(max(s, vec3(0.0)), vec3(2.2));
+}
+
 // Distance to the icon `kind` (1 .. 6) in a box of the given size (the stroke is not subtracted).
 float sdIcon(int kind, vec2 p, float s) {
     if (kind == 1) {            // check mark
@@ -95,14 +104,14 @@ vec4 shadeUi(vec4 color, vec4 border, vec4 tex, vec4 params, vec2 local, vec2 si
 
     vec2 p = (local - vec2(0.5)) * size;                 // pixels from the center of the shape
     float shade = 1.0 + gradient * (1.0 - 2.0 * clamp(local.y, 0.0, 1.0));
-    float dither = (noise(fragCoord) - 0.5) / 255.0;
+    float n = noise(fragCoord);
 
     vec4 fill = vec4(color.r * tex.r, color.g * tex.g, color.b * tex.b, color.a * tex.a);
     fill = vec4(fill.r * shade, fill.g * shade, fill.b * shade, fill.a);
 
     if (kind >= 1 && kind <= 6) {                        // icon
         float d = sdIcon(kind, p, min(size.x, size.y)) - bw * 0.5;
-        return vec4(fill.r + dither, fill.g + dither, fill.b + dither, fill.a * coverage(d, aa));
+        return vec4(ditherLinear(vec3(fill.r, fill.g, fill.b), n), fill.a * coverage(d, aa));
     }
 
     // rounded box
@@ -128,7 +137,7 @@ vec4 shadeUi(vec4 color, vec4 border, vec4 tex, vec4 params, vec2 local, vec2 si
     float ca = ba + (fa - ba) * inner;
     vec3 cp = vec3(border.r, border.g, border.b) * ba * (1.0 - inner) + vec3(fill.r, fill.g, fill.b) * fa * inner;
     vec3 rgb = ca > 1e-5 ? cp / ca : vec3(0.0);
-    return vec4(rgb.r + dither, rgb.g + dither, rgb.b + dither, ca * outer);
+    return vec4(ditherLinear(rgb, n), ca * outer);
 }
 // ---- END SHADE --------------------------------------------------------------------------------------------------------------
 

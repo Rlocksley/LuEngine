@@ -60,6 +60,15 @@ namespace Lu {
         inline bool isSet(const Color& color) { return color.a >= 0.0f; }
         inline Color pick(const Color& own, const Color& fallback) { return isSet(own) ? own : fallback; }
 
+        // sRGB (as in a color picker / image editor) -> linear (what the shaders have to output: the swapchain is VK_FORMAT_B8G8R8A8_SRGB, the
+        // GPU encodes linear -> sRGB when it writes the pixel). Alpha is not changed.
+        inline float srgbToLinear(float c) {
+            return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+        }
+        inline Color srgbToLinear(const Color& c) {
+            return Color(srgbToLinear(c.r), srgbToLinear(c.g), srgbToLinear(c.b), c.a);
+        }
+
         // Layers used by the visuals of ONE widget: 0 .. kLayerStep-1 (border, fill, mark, text, knob ...).
         // A child widget sits Node::layer (default kLayerStep) above its parent.
         inline constexpr uint32_t kLayerStep = 8;
@@ -121,6 +130,10 @@ namespace Lu {
 
             float fontSize{20.0f};
             float borderWidth{2.0f};
+
+            // true: all colors of the UI (this Style, and Color fields of Panel, Label, Button, ... ) are sRGB values like in a color picker
+            // and the module converts them to linear for the renderer (sRGB swapchain). false: you give linear values.
+            bool srgbColors{true};
 
             Color text{0.93f, 0.90f, 0.82f, 1.0f};
             Color textDim{0.62f, 0.62f, 0.60f, 1.0f};

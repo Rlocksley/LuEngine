@@ -338,19 +338,19 @@ namespace Lu {
                     Mesh2D mesh;
                     mesh.mesh = style.rect;
                     applyClip(mesh);
-                    mesh.color = color;
+                    mesh.color = gpu(color);
                     part(slot, position, glm::max(rectSize, glm::vec2(0.0f)), layer, mesh);
                 }
 
                 void circle(Slot slot, glm::vec2 position, glm::vec2 diameter, uint32_t layer, const Color& color) {
                     if (sdf) {      // a rounded box with radius = half size (the unit circle mesh does not fit the SDF shader)
-                        sdfPart(slot, position, diameter, layer, color, Color(0.0f), glm::vec4(std::min(diameter.x, diameter.y) * 0.5f, 0.0f, 0.0f, 0.0f), color.a < 0.99f);
+                        sdfPart(slot, position, diameter, layer, color, Color(0.0f), glm::vec4(std::min(diameter.x, diameter.y) * 0.5f, 0.0f, 0.0f, 0.0f), color.a < 0.99f);   // (sdfPart converts)
                         return;
                     }
                     Mesh2D mesh;
                     mesh.mesh = style.circle;
                     applyClip(mesh);
-                    mesh.color = color;
+                    mesh.color = gpu(color);
                     part(slot, position, diameter, layer, mesh);
                 }
 
@@ -359,7 +359,7 @@ namespace Lu {
                     mesh.mesh = style.rect;
                     applyClip(mesh);
                     mesh.texture = image.texture;
-                    mesh.color = image.tint;
+                    mesh.color = gpu(image.tint);
                     mesh.uvRect = image.uvRect;
                     mesh.params = glm::vec4(std::min(image.radius, std::min(rectSize.x, rectSize.y) * 0.5f), 0.0f, 0.0f, 0.0f);   // (SDF look: rounded corners)
                     part(slot, position, rectSize, layer, mesh);
@@ -371,7 +371,7 @@ namespace Lu {
                     text.text = str.empty() ? std::string(" ") : str;
                     text.font = style.font;
                     applyClip(text);
-                    text.color = color;
+                    text.color = gpu(color);
                     text.size = fontSize;
                     text.align = align;
                     text.maxWidth = maxWidth;
@@ -401,8 +401,8 @@ namespace Lu {
                     // translucent shapes need blending (alpha to coverage would dither them): the blended pipeline draws after
                     // the opaque shapes, with depth test but without depth write
                     mesh.pipeline = (soft && style.softPipeline.id() != 0) ? style.softPipeline : style.shapePipeline;
-                    mesh.color = color;
-                    mesh.uvRect = border;
+                    mesh.color = gpu(color);
+                    mesh.uvRect = gpu(border);
                     mesh.params = params;
                     if (clip != 0) mesh.clip = w.entity(clip);
                     part(slot, position, glm::max(partSize, glm::vec2(0.0f)), layer, mesh);
@@ -485,6 +485,9 @@ namespace Lu {
                     circle(slot(5), position + glm::vec2(0.0f, rectSize.y - d.y), d, layer, color);
                     circle(slot(6), position + rectSize - d, d, layer, color);
                 }
+
+                // Color for the GPU: the UI colors are sRGB, the renderer wants linear (the swapchain encodes on write).
+                Color gpu(const Color& c) const { return style.srgbColors ? srgbToLinear(c) : c; }
 
                 float fontSizeOr(float own) const { return own > 0.0f ? own : style.fontSize; }
 
