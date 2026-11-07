@@ -26,22 +26,6 @@ namespace Lu {
                         });
 
 
-                    flecs::query<const Local, World> query = world.query_builder<const Local, World>()
-                    .expr("(flecs.core.ChildOf, $parent) || (flecs.core.Parent, $parent)")
-                    .build();
-
-                    world.observer<const World>()
-                    .event(flecs::OnSet)
-                    .each([query](flecs::entity parent, const World& parentWorld){
-                        query
-                        .iter()
-                        .set_var("$parent", parent)
-                        .each([parentWorld](flecs::entity child, const Local& local, World& childWorld){
-                            childWorld = composeWorld(parentWorld, local);
-                            child.modified<World>();
-                        });
-                    });
-
                     world.observer<const Local>()
                         .event(flecs::OnRemove)
                         .each([](flecs::entity e, const Local&) {

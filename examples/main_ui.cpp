@@ -120,7 +120,7 @@ struct UIDemoModule {
         for (int i = 0; i < 10; ++i) {
             world.entity().child_of(queue)
                 .set<Transform2D>({})
-                .set<Node>({.size = {360.f, 34.f}, .order = i})
+                .set<Node>({.size = {380.f, 34.f}, .order = i})
                 .set<Button>({.text = std::string("Build ") + items[i], .onClick = [progress, status, name = std::string(items[i])](flecs::entity) {
                     progress.set<ProgressBar>({.value = 0.0f, .showText = true});
                     status.set<Label>({.text = "Production changed to " + name, .fontSize = 18.f});
