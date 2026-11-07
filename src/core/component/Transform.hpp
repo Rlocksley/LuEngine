@@ -3,7 +3,6 @@
 #include "Global.hpp"
 #include "flecs.h"
 #include "Static.hpp"
-#include "TransformHierarchy.hpp"
 
 namespace Lu {
     namespace Component {
@@ -73,14 +72,5 @@ namespace Lu {
         };
     }
 
-    namespace Module{
-        struct Transform{
-            // Transform = the transform the API user sets: LOCAL to the parent entity if that (or an ancestor) has a
-            // Transform, WORLD if there is none. WorldTransform is added / updated / removed automatically.
-            Transform(flecs::world& world){
-                world.component<Component::MeshTransform>();
-                Component::Detail::TransformHierarchy<Component::Transform, Component::WorldTransform>::install(world);
-            }
-        };
-    }
+
 }

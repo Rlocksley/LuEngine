@@ -3,7 +3,7 @@
 #include "Global.hpp"
 #include "flecs.h"
 #include "Static.hpp"
-#include "TransformHierarchy.hpp"
+
 
 namespace Lu {
     namespace Component {
@@ -64,13 +64,5 @@ namespace Lu {
             result.positionZ = static_cast<uint32_t>(z > UINT32_MAX ? UINT32_MAX : z);
             return result;
         }
-    }
-
-    namespace Module {
-        struct Transform2D {
-            Transform2D(flecs::world& world) {
-                Component::Detail::TransformHierarchy<Component::Transform2D, Component::WorldTransform2D>::install(world);
-            }
-        };
     }
 }

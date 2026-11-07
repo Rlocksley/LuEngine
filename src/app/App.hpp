@@ -14,6 +14,8 @@
 #include "modul/Camera2DModule.hpp"
 #include "modul/TextModule.hpp"
 #include "modul/Mesh2DModule.hpp"
+#include "modul/TransformModule.hpp"
+#include "modul/Transform2DModule.hpp"
 #include "component/Mesh.hpp"
 #include "component/Skeleton.hpp"
 #include "component/AnimationStateMachine.hpp"
