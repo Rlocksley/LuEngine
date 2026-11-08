@@ -152,3 +152,15 @@ target_link_libraries(lu_example_ui PRIVATE
     lu_app
     flecs::flecs
 )
+
+add_executable(lu_example_video main_video.cpp)
+target_include_directories(lu_example_video PUBLIC ../src/core ../src/shape ../src/app ../src ../src/component ../src/module)
+target_link_libraries(lu_example_video PRIVATE
+    Vulkan::Vulkan
+    glm::glm
+    glfw
+    lu_core
+    lu_shape
+    lu_app
+    flecs::flecs
+)

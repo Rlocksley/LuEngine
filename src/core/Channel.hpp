@@ -160,6 +160,15 @@ namespace Lu{
             flecs::entity_t entity;
         };
 
+        // Playback control of a registered video (Component::VideoPlayback). Not a lifecycle request: there is no
+        // Create/Destroy, the video is registered with App::registerVideo.
+        struct UpdateVideo{
+            flecs::entity_t entity;     // the video entity
+            bool playing;
+            bool loop;
+            float speed;
+        };
+
         struct UpdateCamera2D{
             Camera2DData cameraData;
         };
@@ -200,7 +209,7 @@ namespace Lu{
 
         using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMeshTransform, DestroyMeshTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera,
             CreateSkeleton, DestroySkeleton, CreateSkeletonMesh, DestroySkeletonMesh,
-            CreateTransform2D, UpdateTransform2D, DestroyTransform2D, CreateText, DestroyText, UpdateCamera2D, CreateMesh2D, DestroyMesh2D>;
+            CreateTransform2D, UpdateTransform2D, DestroyTransform2D, CreateText, DestroyText, UpdateCamera2D, CreateMesh2D, DestroyMesh2D, UpdateVideo>;
 
     }
 

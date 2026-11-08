@@ -55,6 +55,15 @@ namespace Lu{
         std::vector<std::pair<uint32_t, uint32_t>> codepointRanges{{32, 126}, {160, 255}};
     };
 
+    // Describes a video that is decoded in real time into one texture (App::registerVideo).
+    struct VideoConfig{
+        std::string name;                 // name of the flecs entity that Component::VideoTexture::video refers to
+        std::string filePath;             // MPEG-1 program stream (.mpg), no audio. See core/VideoDecoder.hpp for the ffmpeg command
+        bool loop{true};
+        bool autoplay{true};
+        float speed{1.0f};                // playback speed, 1 = real time
+    };
+
     struct ComputePipelineConfig{
         std::string name;
         std::string computeShader;

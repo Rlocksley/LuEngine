@@ -125,7 +125,7 @@ namespace Lu{
             }
 
             void Texture::recordCopy(VkCommandBuffer commandBuffer, VkBuffer sourceBuffer,
-                VkDeviceSize sourceOffset) const {
+                VkDeviceSize sourceOffset, VkPipelineStageFlags srcStage) const {
                 VkImageMemoryBarrier transferBarrier{};
                 transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
                 transferBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -138,7 +138,7 @@ namespace Lu{
 
                 vkCmdPipelineBarrier(
                     commandBuffer,
-                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    srcStage,
                     VK_PIPELINE_STAGE_TRANSFER_BIT,
                     0, 0, nullptr, 0, nullptr, 1, &transferBarrier);
 

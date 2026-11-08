@@ -94,6 +94,11 @@ namespace Lu{
                 return textureArray;
             }
 
+            // The Texture object behind a registered texture entity (VideoPackage rewrites its content every frame).
+            std::shared_ptr<Texture> getTexture(TextureEntity entity) const{
+                return textureArray[getTextureId(entity)];
+            }
+
             TextureId getTextureId(TextureEntity entity) const{
                 auto it = entityToTextureId.find(entity);
                 LU_ASSERT(it != entityToTextureId.end(), "TexturePackage", "getTextureId", "No TextureId for TextureEntity");
