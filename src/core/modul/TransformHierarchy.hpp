@@ -16,7 +16,6 @@ namespace Lu {
                     world.component<Local>();
                     world.component<World>();
 
-                    // ---- Local added / set: (re)compute its world, then update all descendants ----------------------
                     world.observer<const Local, const World*>()
                         .term_at(1).up()
                         .event(flecs::OnAdd)

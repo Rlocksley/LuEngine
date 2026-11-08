@@ -50,22 +50,12 @@ namespace Module {
                             auto entity = it.entity(i);
                             const auto parent = entity.parent();
                             const Component::Mesh2D& mesh = meshes[i];
-                            // The clip rectangle (a Transform2D) has to be mirrored before the mesh refers to it. Not yet:
-                            // stay dirty and try again next frame. A clip entity that does not exist (anymore) = no clip.
-                            flecs::entity_t clip = mesh.clip.id();
-                            if (clip != 0) {
-                                if (!it.world().is_alive(clip)) {
-                                    clip = 0;
-                                } else {
-                                    const auto clipEntity = it.world().entity(clip);
-                                    if (!clipEntity.has<Component::Transform2D>() || !clipEntity.has<Component::Transform2DGpu>()) continue;
-                                }
-                            }
+                         
                             if (parent.is_valid() && parent.has<Component::Transform2D>() && parent.has<Component::Transform2DGpu>() &&
                                 mesh.mesh.id() != 0 && mesh.pipeline.id() != 0) {
                                 requests.push_back(EcsRequest::CreateMesh2D{
                                     parent.id(), entity.id(), mesh.mesh.id(), mesh.pipeline.id(), mesh.texture.id(),
-                                    mesh.color, mesh.uvRect, mesh.params, clip});
+                                    mesh.color, mesh.uvRect, mesh.params, mesh.clip.id()});
                             }
                             entity.remove<Component::Mesh2DGpuDirty>();
                         }

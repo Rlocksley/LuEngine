@@ -34,11 +34,11 @@ struct MyLevelModul{
 
         world.system<Lu::Component::Transform>("CubeRotationSystem")
             .with<MyRotatingCubeTag>()    
-            .each([b = 0.208186f, speed = attractorSpeed](
-
-                flecs::iter& it, size_t index, Lu::Component::Transform& transform) {
-
-                
+            .each([](flecs::entity e, Lu::Component::Transform& transform) {
+                float deltaTime = e.world().delta_time();
+                float angle = deltaTime * 1.0f;
+                glm::quat rotationDelta = glm::angleAxis(angle, glm::vec3(0.0f, 1.0f, 0.0f));
+                transform.rotation = rotationDelta * transform.rotation;
             });
 
         uint32_t numberCubes = 10;
@@ -48,14 +48,17 @@ struct MyLevelModul{
         for(uint32_t i = 0; i < numberCubes; i++){
             auto cube = world.entity(("MyCube_" + std::to_string(i)).c_str()); 
             if(i != 0){
-                cube.set(flecs::ChildOf, parent);
+                cube.set(flecs::Parent{parent});
+                cube.add<MyRotatingCubeTag>();
+            }else{
+                cube.add<MyRotatingCubeTag>();
             }
             parent = cube
             .set<Lu::Component::Transform>({
-                glm::vec3(1/sqrt(i+1),0,0),   //position
+                glm::vec3(5/sqrt(i+1),0,0),   //position
                 random(3.14f/2.f,3.14f/2.f),                  //angle
                 glm::normalize(glm::vec3(random(0,0),random(1,1),random(0,0))),   //axis
-                glm::vec3(1/pow(2,i+2))})  //scale
+                glm::vec3(1/2.f)})  //scale
             .add<Lu::Component::TransformGpu>();// mirrors Transform on Gpu
 
             world.entity(("MyCubeMesh_" + std::to_string(i)).c_str())
