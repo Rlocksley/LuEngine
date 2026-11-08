@@ -146,6 +146,14 @@ namespace Lu{
             mesh2D.updateDescriptorSetWrites();
         }
         
+        void Renderer::createVideoStream(const VideoEntity entity, const TextureEntity textureEntity, const VideoStreamConfig& config){
+            video.createVideoStream(entity, textureEntity, config, texture);
+            // the video texture is a new element of the global texture array
+            mesh.updateDescriptorSetWrites();
+            skeleton.updateDescriptorSetWrites();
+            font.updateDescriptorSetWrites();
+            mesh2D.updateDescriptorSetWrites();
+        }
         void Renderer::createVideo(const VideoEntity entity, const TextureEntity textureEntity, const VideoConfig& config){
             video.createVideo(entity, textureEntity, config, texture);
             // the video texture is a new element of the global texture array

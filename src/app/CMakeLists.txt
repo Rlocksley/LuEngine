@@ -12,4 +12,5 @@ target_link_libraries(lu_app PUBLIC
     Vulkan::Vulkan  # The imported target for Vulkan
     glm::glm        # The imported target for GLM
     glfw            # The imported target for GLFW
+    ccap::ccap
 )

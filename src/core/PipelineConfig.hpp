@@ -64,6 +64,16 @@ namespace Lu{
         float speed{1.0f};                // playback speed, 1 = real time
     };
 
+    // Describes a live camera stream captured into one texture (App::registerVideoStream).
+    struct VideoStreamConfig{
+        std::string name;                 // name of the flecs entity that Component::VideoTexture::video refers to
+        int deviceIndex{0};               // camera index (0 = default / first camera)
+        std::string deviceName{""};       // optional device name or backend hint
+        uint32_t width{0};                // requested capture width (0 = default/auto)
+        uint32_t height{0};               // requested capture height (0 = default/auto)
+        double frameRate{0.0};            // requested capture framerate (0 = default/auto)
+    };
+
     struct ComputePipelineConfig{
         std::string name;
         std::string computeShader;

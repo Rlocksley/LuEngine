@@ -39,6 +39,24 @@ find_package(assimp REQUIRED)
 
 find_package(Freetype REQUIRED)
 
+# --- External CameraCapture Library ---
+include(FetchContent)
+set(CCAP_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(CCAP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(CCAP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    ccap
+    GIT_REPOSITORY https://github.com/wysaid/CameraCapture.git
+    GIT_TAG        main
+)
+FetchContent_MakeAvailable(ccap)
+
+if(NOT TARGET ccap::ccap)
+    add_library(ccap::ccap ALIAS ccap)
+endif()
+
+include_directories(${ccap_SOURCE_DIR}/include)
+
 # --- Build Internal Libraries ---
 # Process the subdirectories to create our 'component_lib' and 'core_lib' targets.
 add_subdirectory(./src/core)
@@ -52,15 +70,3 @@ add_subdirectory(./src/shape)
 #add_subdirectory(./analyzer)
 
 add_subdirectory(./examples)
-#add_subdirectory(./examples/example2)
-#add_subdirectory(./examples/example3)
-#add_subdirectory(./examples/example4)
-#add_subdirectory(./examples/example5)
-#add_subdirectory(./examples/example6)
-#add_subdirectory(./examples/example7)
-#add_subdirectory(./examples/example8)
-#add_subdirectory(./examples/example9)
-#add_subdirectory(./examples/example10)
-#add_subdirectory(./examples/example11)
-#add_subdirectory(./examples/example12)
-#add_subdirectory(./examples/example13)

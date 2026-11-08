@@ -9,14 +9,16 @@
 #include "PipelineConfig.hpp"
 #include "VideoDecoder.hpp"
 #include "flecs.h"
+#include <ccap.h>
 
 namespace Lu{
     namespace Core{
 
         // Videos = textures whose pixels change.
         //
-        //   registerVideo  ->  VideoDecoder (worker thread, RGBA frames)  +  one entry of the global texture array
-        //   every frame    ->  newest decoded frame -> staging buffer of the frame in flight -> vkCmdCopyBufferToImage
+        //   registerVideo       -> VideoDecoder (worker thread, RGBA frames) + one entry of the global texture array
+        //   registerVideoStream -> ccap::Provider (camera capture) -> feeds VideoDecoder + one entry of global texture array
+        //   every frame         -> newest decoded frame -> staging buffer of the frame in flight -> vkCmdCopyBufferToImage
         //
         // Because the video IS a slot of the global texture array, everything that samples that array shows it without
         // any shader change: Mesh2D::texture, Material::textures[..] of 3D meshes, skeleton meshes, ...
@@ -26,10 +28,18 @@ namespace Lu{
         private:
             struct Video{
                 std::unique_ptr<VideoDecoder> decoder;
+                std::unique_ptr<ccap::Provider> camera; // live camera capture provider
                 std::shared_ptr<Texture> texture;
                 uint64_t serial{0};     // serial of the frame that is in the texture
                 // one staging buffer per frame in flight: the buffer of a frame slot is only reused after its fence was waited
                 std::array<std::unique_ptr<BufferInterface<uint8_t>>, MAX_FRAMES_IN_FLIGHT> staging;
+
+                ~Video(){
+                    if(camera){
+                        camera->setNewFrameCallback(nullptr);
+                        camera->close();
+                    }
+                }
             };
 
             using VideoEntity = flecs::entity_t;
@@ -76,6 +86,76 @@ namespace Lu{
                 LU_LOGI("VideoPackage", "createVideo", config.name + ": " + std::to_string(width) + "x" + std::to_string(height) +
                     ", " + std::to_string(videos.back()->decoder->getFrameRate()) + " fps, " +
                     std::to_string(videos.back()->decoder->getDuration()) + " s")
+#endif
+            }
+
+            // Captures a live camera stream via ccap, feeds it into a VideoDecoder, and registers the texture `textureEntity`.
+            void createVideoStream(const VideoEntity entity, const TextureEntity textureEntity,
+                                   const VideoStreamConfig& config, TexturePackage& textures)
+            {
+                LU_ASSERT(entityToVideo.find(entity) == entityToVideo.end(), "VideoPackage", "createVideoStream", "Entity already is a video.")
+
+                auto video = std::make_unique<Video>();
+                auto camera = std::make_unique<ccap::Provider>();
+
+                // Configure requested camera parameters before opening
+                if(config.width > 0) camera->set(ccap::PropertyName::Width, config.width);
+                if(config.height > 0) camera->set(ccap::PropertyName::Height, config.height);
+                if(config.frameRate > 0.0) camera->set(ccap::PropertyName::FrameRate, config.frameRate);
+                camera->set(ccap::PropertyName::PixelFormatOutput, ccap::PixelFormat::RGBA32);
+
+                bool opened = false;
+                if(!config.deviceName.empty()){
+                    opened = camera->open(config.deviceName, true);
+                } else {
+                    opened = camera->open(config.deviceIndex, true);
+                }
+
+                if(!opened){
+                    throw std::runtime_error("VideoPackage: cannot open camera device '" +
+                        (config.deviceName.empty() ? std::to_string(config.deviceIndex) : config.deviceName) + "'");
+                }
+
+                // Grab first frame to determine video dimensions and initial texture content
+                auto firstFrame = camera->grab(3000);
+                if(!firstFrame){
+                    throw std::runtime_error("VideoPackage: timed out waiting for first frame from camera '" + config.name + "'");
+                }
+
+                // Initialize the decoder for stream mode and feed the first frame
+                video->decoder = std::make_unique<VideoDecoder>(firstFrame->width, firstFrame->height,
+                    config.frameRate > 0.0 ? config.frameRate : 30.0);
+                video->decoder->feedFrame(firstFrame);
+
+                const uint32_t width = video->decoder->getWidth();
+                const uint32_t height = video->decoder->getHeight();
+                const size_t byteSize = video->decoder->getFrameByteSize();
+
+                std::shared_ptr<uint8_t[]> firstPixels(new uint8_t[byteSize], std::default_delete<uint8_t[]>());
+                const bool hasFirst = video->decoder->fetchFrame(firstPixels.get(), video->serial);
+                LU_ASSERT(hasFirst, "VideoPackage", "createVideoStream", "The decoder has no first frame.")
+
+                TextureCpu textureCpu;
+                textureCpu.width = width;
+                textureCpu.height = height;
+                textureCpu.pixels = std::move(firstPixels);
+                textureCpu.vkFormat = VK_FORMAT_R8G8B8A8_SRGB;
+                textures.createTexture(textureEntity, std::move(textureCpu));
+                video->texture = textures.getTexture(textureEntity);
+
+                // Continuously feed camera frames into the decoder
+                VideoDecoder* pDecoder = video->decoder.get();
+                camera->setNewFrameCallback([pDecoder](const std::shared_ptr<ccap::VideoFrame>& frame) -> bool {
+                    pDecoder->feedFrame(frame);
+                    return true;
+                });
+
+                video->camera = std::move(camera);
+                entityToVideo[entity] = video.get();
+                videos.push_back(std::move(video));
+
+#ifdef LU_DEBUG
+                LU_LOGI("VideoPackage", "createVideoStream", config.name + ": " + std::to_string(width) + "x" + std::to_string(height))
 #endif
             }
 

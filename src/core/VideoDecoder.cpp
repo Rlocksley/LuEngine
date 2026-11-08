@@ -7,6 +7,9 @@
 #define PL_MPEG_IMPLEMENTATION
 #include "pl_mpeg/pl_mpeg.h"
 
+#include <ccap.h>
+#include <ccap_convert.h>
+
 namespace Lu{
     namespace Core{
 
@@ -16,7 +19,7 @@ namespace Lu{
         }
 
         VideoDecoder::VideoDecoder(const std::string& filePath, bool loop, bool playing, float speed) :
-            playing(playing), loop(loop), speed(speed < 0.0f ? 0.0f : speed)
+            isStreamMode(false), playing(playing), loop(loop), speed(speed < 0.0f ? 0.0f : speed)
         {
             plm = plm_create_with_filename(filePath.c_str());
             if(plm == nullptr){
@@ -55,6 +58,16 @@ namespace Lu{
             worker = std::thread(&VideoDecoder::threadMain, this);
         }
 
+        VideoDecoder::VideoDecoder(uint32_t initialWidth, uint32_t initialHeight, double frameRate) :
+            isStreamMode(true), width(initialWidth), height(initialHeight), frameRate(frameRate), duration(0.0),
+            playing(true), loop(true), speed(1.0f)
+        {
+            if(width > 0 && height > 0){
+                frontFrame.assign(getFrameByteSize(), 255);
+                backFrame.assign(getFrameByteSize(), 255);
+            }
+        }
+
         VideoDecoder::~VideoDecoder(){
             stop.store(true, std::memory_order_relaxed);
             if(worker.joinable()){
@@ -62,6 +75,7 @@ namespace Lu{
             }
             if(plm != nullptr){
                 plm_destroy(plm);
+                plm = nullptr;
             }
         }
 
@@ -71,18 +85,125 @@ namespace Lu{
 
         void VideoDecoder::publishBack(){
             std::lock_guard<std::mutex> lock(frameMutex);
-            frontFrame.swap(backFrame);
+            if(frontFrame.size() != backFrame.size()){
+                frontFrame = backFrame;
+            } else {
+                frontFrame.swap(backFrame);
+            }
             ++frontSerial;
         }
 
         bool VideoDecoder::fetchFrame(uint8_t* dst, uint64_t& lastSerial){
             std::lock_guard<std::mutex> lock(frameMutex);
-            if(frontSerial == lastSerial){
+            if(frontSerial == lastSerial || frontFrame.empty()){
                 return false;
             }
             std::memcpy(dst, frontFrame.data(), frontFrame.size());
             lastSerial = frontSerial;
             return true;
+        }
+
+        void VideoDecoder::feedFrame(const std::shared_ptr<ccap::VideoFrame>& frame){
+            if(!frame || !playing.load(std::memory_order_relaxed)){
+                return;
+            }
+
+            std::lock_guard<std::mutex> feedLock(feedMutex);
+
+            const uint32_t frameWidth = frame->width;
+            const uint32_t frameHeight = frame->height;
+            if(frameWidth == 0 || frameHeight == 0) return;
+
+            if(width != frameWidth || height != frameHeight){
+                width = frameWidth;
+                height = frameHeight;
+            }
+
+            const size_t byteSize = getFrameByteSize();
+            if(backFrame.size() != byteSize){
+                backFrame.assign(byteSize, 255);
+            }
+
+            const int dstStride = static_cast<int>(width * 4);
+            uint8_t* dst = backFrame.data();
+            const bool flip = (frame->orientation == ccap::FrameOrientation::BottomToTop);
+            const int effHeight = flip ? -static_cast<int>(height) : static_cast<int>(height);
+
+            switch(frame->pixelFormat){
+                case ccap::PixelFormat::RGBA32: {
+                    if(!flip && static_cast<uint32_t>(frame->stride[0]) == width * 4){
+                        std::memcpy(dst, frame->data[0], byteSize);
+                    } else {
+                        const uint8_t* src = frame->data[0];
+                        const int srcStride = static_cast<int>(frame->stride[0]);
+                        for(uint32_t y = 0; y < height; ++y){
+                            const uint32_t srcY = flip ? (height - 1 - y) : y;
+                            std::memcpy(dst + y * dstStride, src + srcY * srcStride, width * 4);
+                        }
+                    }
+                    break;
+                }
+                case ccap::PixelFormat::BGRA32: {
+                    ccap::bgraToRgba(frame->data[0], frame->stride[0], dst, dstStride, width, effHeight);
+                    break;
+                }
+                case ccap::PixelFormat::RGB24: {
+                    ccap::rgbToRgba(frame->data[0], frame->stride[0], dst, dstStride, width, effHeight);
+                    break;
+                }
+                case ccap::PixelFormat::BGR24: {
+                    ccap::bgrToRgba(frame->data[0], frame->stride[0], dst, dstStride, width, effHeight);
+                    break;
+                }
+                case ccap::PixelFormat::NV12:
+                case ccap::PixelFormat::NV12f: {
+                    ccap::nv12ToRgba32(frame->data[0], frame->stride[0],
+                                       frame->data[1], frame->stride[1],
+                                       dst, dstStride, width, effHeight);
+                    break;
+                }
+                case ccap::PixelFormat::I420:
+                case ccap::PixelFormat::I420f: {
+                    ccap::i420ToRgba32(frame->data[0], frame->stride[0],
+                                       frame->data[1], frame->stride[1],
+                                       frame->data[2], frame->stride[2],
+                                       dst, dstStride, width, effHeight);
+                    break;
+                }
+                case ccap::PixelFormat::YUYV:
+                case ccap::PixelFormat::YUYVf: {
+                    ccap::yuyvToRgba32(frame->data[0], frame->stride[0], dst, dstStride, width, effHeight);
+                    break;
+                }
+                case ccap::PixelFormat::UYVY:
+                case ccap::PixelFormat::UYVYf: {
+                    ccap::uyvyToRgba32(frame->data[0], frame->stride[0], dst, dstStride, width, effHeight);
+                    break;
+                }
+                default: {
+                    if(frame->data[0] != nullptr && frame->sizeInBytes >= byteSize){
+                        std::memcpy(dst, frame->data[0], byteSize);
+                    }
+                    break;
+                }
+            }
+
+            publishBack();
+        }
+
+        void VideoDecoder::feedFrame(const uint8_t* rgbaData, uint32_t frameWidth, uint32_t frameHeight){
+            if(!rgbaData || !playing.load(std::memory_order_relaxed)) return;
+            std::lock_guard<std::mutex> feedLock(feedMutex);
+            if(width != frameWidth || height != frameHeight){
+                width = frameWidth;
+                height = frameHeight;
+            }
+            const size_t byteSize = getFrameByteSize();
+            if(backFrame.size() != byteSize){
+                backFrame.assign(byteSize, 255);
+            }
+            std::memcpy(backFrame.data(), rgbaData, byteSize);
+            publishBack();
         }
 
         void VideoDecoder::setPlaying(bool value){

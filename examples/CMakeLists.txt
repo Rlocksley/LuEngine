@@ -27,7 +27,7 @@ target_link_libraries(lu_example1 PRIVATE
     flecs::flecs
 )
 
-add_executable(lu_example4 main18.cpp)
+add_executable(lu_example4 main_video.cpp)
 target_include_directories(lu_example4 PUBLIC ../src/core ../src/shape ../src/app ../src/physics ../src ../src/component ../src/module)
 target_link_libraries(lu_example4 PRIVATE
     Vulkan::Vulkan
