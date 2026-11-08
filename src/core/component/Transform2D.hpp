@@ -44,6 +44,17 @@ namespace Lu {
                 const glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale, 1.0f));
                 return translationMat * rotationMat * scaleMat;
             }
+
+             Transform2D operator*(const Transform2D& other) const { 
+                Transform2D result;
+                result.scale = scale * other.scale;
+                result.rotation = rotation * other.rotation;
+                const glm::vec3 rotated = rotation * glm::vec3(scale * other.position, 0.0f);
+                result.position = position + glm::vec2(rotated.x, rotated.y);
+                const uint64_t z = static_cast<uint64_t>(positionZ) + other.positionZ;
+                result.positionZ = static_cast<uint32_t>(z > UINT32_MAX ? UINT32_MAX : z);
+                return result;
+             }
         };
 
         // The WORLD transform of an entity with a Transform2D, maintained automatically (see Transform2D). This is what the
@@ -54,15 +65,6 @@ namespace Lu {
             WorldTransform2D(const Transform2D& other) : Transform2D(other) {}
         };
 
-        inline WorldTransform2D composeWorld(const WorldTransform2D& parentWorld, const Transform2D& local) {
-            WorldTransform2D result;
-            result.scale = parentWorld.scale * local.scale;
-            result.rotation = parentWorld.rotation * local.rotation;
-            const glm::vec3 rotated = parentWorld.rotation * glm::vec3(parentWorld.scale * local.position, 0.0f);
-            result.position = parentWorld.position + glm::vec2(rotated.x, rotated.y);
-            const uint64_t z = static_cast<uint64_t>(parentWorld.positionZ) + local.positionZ;
-            result.positionZ = static_cast<uint32_t>(z > UINT32_MAX ? UINT32_MAX : z);
-            return result;
-        }
+
     }
 }

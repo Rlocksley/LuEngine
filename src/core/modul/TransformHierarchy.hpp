@@ -22,7 +22,7 @@ namespace Lu {
                         .event(flecs::OnAdd)
                         .event(flecs::OnSet)
                         .each([](flecs::entity e, const Local& local, const World* parentWorld) {
-                            e.set<World>(parentWorld ? composeWorld(*parentWorld, local) : World(local));
+                            e.set<World>(parentWorld ? *parentWorld * local : World(local));
                         });
 
 
@@ -37,7 +37,7 @@ namespace Lu {
                         .term_at(2).cascade()
                         .kind(flecs::PostUpdate)
                         .each([](const Local& local, World& childWorld, const World* parentWorld) {
-                            childWorld = parentWorld ? composeWorld(*parentWorld, local) : World(local);
+                            childWorld = parentWorld ? *parentWorld * local : World(local);
                         });
                 }
             };
