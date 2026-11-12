@@ -88,5 +88,4 @@ target_link_libraries(lu_core PUBLIC
     flecs::flecs
     assimp::assimp  # The imported target for Assimp
     Freetype::Freetype  # glyph rasterization (FontPackage)
-    ccap::ccap
 )

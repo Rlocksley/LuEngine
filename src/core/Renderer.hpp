@@ -71,7 +71,6 @@ namespace Lu{
             // Decodes the video in real time into the texture `textureEntity` (a normal element of the global texture array).
             using VideoEntity = flecs::entity_t;
             void createVideo(const VideoEntity entity, const TextureEntity textureEntity, const VideoConfig& config);
-            void createVideoStream(const VideoEntity entity, const TextureEntity textureEntity, const VideoStreamConfig& config);
         private:
 
             void processEcsRequests();

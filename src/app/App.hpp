@@ -239,46 +239,6 @@ namespace Lu{
         // Component::VideoTexture{.video = world.lookup(name)} to a Component::Mesh2D entity (or a 3D Component::Mesh) -
         // see component/Video.hpp. Convert any video once with:
         //      ffmpeg -i in.mp4 -an -c:v mpeg1video -b:v 4M -f mpeg out.mpg      (width and height should be even)
-        // Registers a live video stream from a connected camera (via ccap) into a texture.
-        // Creates two entities: config.name (Component::VideoPlayback = play / pause / loop / speed) and the child
-        // "<name>::Texture" (an element of the global texture array). To show the video stream, add
-        // Component::VideoTexture{.video = world.lookup(name)} to a Component::Mesh2D entity (or a 3D Component::Mesh) -
-        // see component/Video.hpp.
-        App& registerVideoStream(const VideoStreamConfig& config){
-            LU_ASSERT(config.name.size() > 0, "App", "registerVideoStream", "VideoStreamConfig.name must be size bigger 0");
-            LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerVideoStream", "Entity with name: " + config.name + " already exists");
-            const std::string textureName = config.name + "::Texture";
-            LU_ASSERT(!world->lookup(textureName.c_str()), "App", "registerVideoStream", "Entity with name: " + textureName + " already exists");
-
-            flecs::entity video = world->entity(config.name.c_str());
-            renderer->createVideoStream(video.id(), world->entity(textureName.c_str()).id(), config);
-            video.set<Component::VideoPlayback>({true, true, 1.0f});
-
-            return *this;
-        }
-
-        App& registerVideoStream(const std::string& name, int deviceIndex = 0){
-            VideoStreamConfig config;
-            config.name = name;
-            config.deviceIndex = deviceIndex;
-            return registerVideoStream(config);
-        }
-
-        App& registerVideoStream(const std::string& name, const std::string& deviceName){
-            VideoStreamConfig config;
-            config.name = name;
-            config.deviceName = deviceName;
-            return registerVideoStream(config);
-        }
-
-        App& registerVideoStream(const std::string& name, uint32_t width, uint32_t height, int deviceIndex = 0){
-            VideoStreamConfig config;
-            config.name = name;
-            config.width = width;
-            config.height = height;
-            config.deviceIndex = deviceIndex;
-            return registerVideoStream(config);
-        }
         App& registerVideo(const VideoConfig& config){
             LU_ASSERT(config.name.size() > 0, "App", "registerVideo", "VideoConfig.name must be size bigger 0");
             LU_ASSERT(config.filePath.size() > 0, "App", "registerVideo", "VideoConfig.filePath must be size bigger 0");

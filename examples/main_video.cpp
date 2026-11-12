@@ -13,14 +13,18 @@
 #include "component/Transform2DGpu.hpp"
 
 // =============================================================================
-// main_video: one live camera video stream, shown on a Mesh2D (HUD) AND on a 3D mesh.
+// main_video: one video, shown on a Mesh2D (HUD) AND on a 3D mesh.
 //
-//   App::registerVideoStream(name, deviceIndex) captures the camera stream in real time
-//                                              via ccap and feeds it into the VideoDecoder
-//   Component::VideoTexture                    add it to a Mesh2D (or Mesh) entity -> that surface shows the stream
-//   Component::VideoPlayback                   on the video entity: playing / loop / speed (SPACE toggles playing below)
+//   App::registerVideo(name, file)      decodes the video in real time on its own thread into a texture
+//   Component::VideoTexture             add it to a Mesh2D (or Mesh) entity -> that surface shows the video
+//   Component::VideoPlayback            on the video entity: playing / loop / speed (SPACE toggles playing below)
 //
-// Usage: lu_example_video [deviceIndex]        SPACE = pause / resume
+// The video has to be an MPEG-1 program stream without audio. Convert once:
+//      ffmpeg -i in.mp4 -an -c:v mpeg1video -b:v 4M -f mpeg video.mpg
+// or make a test pattern:
+//      ffmpeg -f lavfi -i testsrc=size=640x360:rate=30 -t 10 -c:v mpeg1video -f mpeg video.mpg
+//
+// Usage: lu_example_video [path/to/video.mpg]      SPACE = pause / resume
 // =============================================================================
 
 struct SpinTag {};
@@ -42,7 +46,7 @@ struct VideoDemoModule {
             })
             .set(Lu::Component::VideoTexture{.video = video});      // <- that's all
 
-        // ---- 3D: a cube, the video stream is its emissive texture --------------------------------------------------
+        // ---- 3D: a cube, the video is its emissive texture ---------------------------------------------------------
         world.entity("Camera")
             .set(Lu::Component::FlyingCamera{
                 .position = glm::vec3(0.0f, 0.0f, -4.0f),
@@ -57,7 +61,7 @@ struct VideoDemoModule {
 
         const auto cube = world.entity("Cube")
             .add<SpinTag>()
-            .set<Lu::Component::Transform>({glm::vec3(0.f, 0.f, 0.f), 3.14f, glm::vec3(1.f, 0.f, 0.f), glm::vec3(480.f, 270.f, 480.f)/480.f})
+            .set<Lu::Component::Transform>({glm::vec3(0.f, 0.f, 0.f), 0.f, glm::vec3(0.f, 1.f, 0.f), glm::vec3(1.f)})
             .add<Lu::Component::TransformGpu>();
 
         world.entity("Cube::Mesh")
@@ -90,15 +94,10 @@ struct VideoDemoModule {
 };
 
 int main(int argc, char** argv) {
-    int deviceIndex = 0;
-    if (argc > 1) {
-        try {
-            deviceIndex = std::stoi(argv[1]);
-        } catch (...) {}
-    }
+    const std::string videoPath = argc > 1 ? argv[1] : "asset/video/video.mpg";
 
-    Lu::App("LuEngine Video Stream", false, 1280, 800)
-        .registerVideoStream("Video::Demo", deviceIndex)                          // 1) register camera video stream
+    Lu::App("LuEngine Video", false, 1280, 800)
+        .registerVideo("Video::Demo", videoPath)                                  // 1) register the video
         .registerShape2D<Lu::Shape2D::Rectangle>("Mesh2D::Screen", glm::vec2(480.f, 270.f))
         .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
             .name = "Mesh2DPipe::Basic",
