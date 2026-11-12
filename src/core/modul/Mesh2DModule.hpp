@@ -3,7 +3,6 @@
 #include "flecs.h"
 #include "Channel.hpp"
 #include "component/Mesh2D.hpp"
-#include "component/Video.hpp"
 #include "component/Transform2D.hpp"
 #include "component/Transform2DGpu.hpp"
 
@@ -40,19 +39,6 @@ namespace Module {
                     e.add<Component::Mesh2DGpuDirty>();
                 });
 
-            // VideoTexture added / changed on a Mesh2D (the texture of the Mesh2D is replaced by the video)
-            world.observer<const Component::VideoTexture>()
-                .with<Component::Mesh2D>().filter()
-                .with<Component::Transform2D>().filter()
-                .with<Component::Transform2DGpu>().filter()
-                .term_at(2).up()
-                .term_at(3).up()
-                .event(flecs::OnAdd)
-                .event(flecs::OnSet)
-                .each([](flecs::entity e, const Component::VideoTexture&) {
-                    e.add<Component::Mesh2DGpuDirty>();
-                });
-
             world.system<const Component::Mesh2D>("EcsRequest::CreateMesh2D System")
                 .with<Component::Mesh2DGpuDirty>()
                 .run([](flecs::iter it){
@@ -67,13 +53,8 @@ namespace Module {
                          
                             if (parent.is_valid() && parent.has<Component::Transform2D>() && parent.has<Component::Transform2DGpu>() &&
                                 mesh.mesh.id() != 0 && mesh.pipeline.id() != 0) {
-                                // a VideoTexture replaces the texture of the Mesh2D
-                                flecs::entity_t texture = mesh.texture.id();
-                                if (const Component::VideoTexture* videoTexture = entity.try_get<Component::VideoTexture>()) {
-                                    texture = Component::videoTextureEntity(*videoTexture).id();
-                                }
                                 requests.push_back(EcsRequest::CreateMesh2D{
-                                    parent.id(), entity.id(), mesh.mesh.id(), mesh.pipeline.id(), texture,
+                                    parent.id(), entity.id(), mesh.mesh.id(), mesh.pipeline.id(), mesh.texture.id(),
                                     mesh.color, mesh.uvRect, mesh.params, mesh.clip.id()});
                             }
                             entity.remove<Component::Mesh2DGpuDirty>();

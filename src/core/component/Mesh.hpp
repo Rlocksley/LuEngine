@@ -3,7 +3,6 @@
 #include "Channel.hpp"
 #include "flecs.h"
 #include "component/Material.hpp"
-#include "component/Video.hpp"
 #include "component/Transform.hpp"
 #include "component/TransformGpu.hpp"
 
@@ -57,20 +56,6 @@ namespace Lu{
                         });
                     });
 
-                // VideoTexture added / changed on a Mesh
-                world.observer<const Component::VideoTexture>()
-                    .with<Component::Mesh>().filter()
-                    .with<Component::Material>().filter()
-                    .with<Component::Transform>().filter()
-                    .with<Component::TransformGpu>().filter()
-                    .term_at(3).up()
-                    .term_at(4).up()
-                    .event(flecs::OnAdd)
-                    .event(flecs::OnSet)
-                    .each([](flecs::entity e, const Component::VideoTexture&) {
-                        e.add<Component::MeshGpuDirty>();
-                    });
-
                 world.system<const Component::Mesh, const Component::Material>()
                 .with<Component::MeshGpuDirty>()
                 .run([](flecs::iter it){
@@ -83,16 +68,7 @@ namespace Lu{
                         for (int i = 0; i < it.count(); ++i) {
                             auto entity = it.entity(i);
                             
-                            // a VideoTexture makes the video the emissive texture of the material (a screen that glows)
-                            Component::Material material = materials[i];
-                            if (const Component::VideoTexture* videoTexture = entity.try_get<Component::VideoTexture>()) {
-                                material.textures[4] = Component::videoTextureEntity(*videoTexture);
-                                if (videoTexture->emission > 0.f) {
-                                    material.emission = glm::vec4(videoTexture->emission, videoTexture->emission, videoTexture->emission, material.emission.a);
-                                }
-                            }
-
-                            meshBuffer.push_back(EcsRequest::CreateMesh{entity.parent(), entity , meshes[i].mesh, meshes[i].pipeline, EcsRequest::Material{material}});
+                            meshBuffer.push_back(EcsRequest::CreateMesh{entity.parent(), entity , meshes[i].mesh, meshes[i].pipeline, EcsRequest::Material{materials[i]}});
                             entity.remove<Component::MeshGpuDirty>();
                         }
                     }

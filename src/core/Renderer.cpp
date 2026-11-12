@@ -146,15 +146,6 @@ namespace Lu{
             mesh2D.updateDescriptorSetWrites();
         }
         
-        void Renderer::createVideo(const VideoEntity entity, const TextureEntity textureEntity, const VideoConfig& config){
-            video.createVideo(entity, textureEntity, config, texture);
-            // the video texture is a new element of the global texture array
-            mesh.updateDescriptorSetWrites();
-            skeleton.updateDescriptorSetWrites();
-            font.updateDescriptorSetWrites();
-            mesh2D.updateDescriptorSetWrites();
-        }
-
         void Renderer::processEcsRequests(){
             auto vecEcsRequests = GetChannel().drain(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME);
             for(auto& request : vecEcsRequests){
@@ -305,10 +296,6 @@ namespace Lu{
 
                         [&](const EcsRequest::DestroyMesh2D& req){
                             mesh2D.destroyMesh2D(req.entity);
-                        },
-
-                        [&](const EcsRequest::UpdateVideo& req){
-                            video.update(req.entity, req.playing, req.loop, req.speed);
                         }
 
                     }, 
@@ -368,7 +355,6 @@ namespace Lu{
             meshGeometry.copy(frameIndex, cmd);
             mesh2DGeometry.copy(frameIndex, cmd);
             texture.copy(frameIndex, cmd);
-            video.copy(frameIndex, cmd);          // new frames of the registered videos -> their textures
             camera.copy(frameIndex, cmd);
             transform.copy(frameIndex, cmd);
             lights.copy(frameIndex, cmd);

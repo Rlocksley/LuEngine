@@ -74,9 +74,6 @@ FontAtlas.hpp
 FontAtlas.cpp
 TextPackage.hpp
 Mesh2DPackage.hpp
-VideoDecoder.hpp
-VideoDecoder.cpp
-VideoPackage.hpp
 TextLayout.hpp
 )
 

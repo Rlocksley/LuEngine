@@ -12,7 +12,6 @@
 #include "SkeletonPackage.hpp"
 #include "AnimationLibrary.hpp"
 #include "TexturePackage.hpp"
-#include "VideoPackage.hpp"
 #include "Camera2DPackage.hpp"
 #include "Transform2DPackage.hpp"
 #include "FontPackage.hpp"
@@ -67,10 +66,6 @@ namespace Lu{
             using TextureEntity = flecs::entity_t;
             void createTexture(const TextureEntity entity, const std::string& filePath);
             void createTexture(const TextureEntity entity, TextureCpu&& texture);
-
-            // Decodes the video in real time into the texture `textureEntity` (a normal element of the global texture array).
-            using VideoEntity = flecs::entity_t;
-            void createVideo(const VideoEntity entity, const TextureEntity textureEntity, const VideoConfig& config);
         private:
 
             void processEcsRequests();
@@ -89,7 +84,6 @@ namespace Lu{
             LightPackage lights;
             GeometryPackage<Vertex::Mesh> meshGeometry;
             TexturePackage texture;
-            VideoPackage video;
             MeshPackage mesh;
             MultiMeshPackage multiMesh;
             GeometryPackage<Vertex::Skeleton> skeletonGeometry;

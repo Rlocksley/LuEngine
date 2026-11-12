@@ -20,7 +20,6 @@
 #include "component/Skeleton.hpp"
 #include "component/AnimationStateMachine.hpp"
 #include "component/InputState.hpp"
-#include "component/Video.hpp"
 #include "PipelineConfig.hpp"
 #include "Exit.hpp"
 
@@ -233,34 +232,6 @@ namespace Lu{
             return registerTexture(std::move(cpuTexture));
         }
 
-        // Registers an MPEG-1 video (.mpg, no audio) that is decoded in real time on its own thread into a texture.
-        // Creates two entities: `config.name` (Component::VideoPlayback = play / pause / loop / speed) and the child
-        // "<name>::Texture" (an element of the global texture array). To show the video, add
-        // Component::VideoTexture{.video = world.lookup(name)} to a Component::Mesh2D entity (or a 3D Component::Mesh) -
-        // see component/Video.hpp. Convert any video once with:
-        //      ffmpeg -i in.mp4 -an -c:v mpeg1video -b:v 4M -f mpeg out.mpg      (width and height should be even)
-        App& registerVideo(const VideoConfig& config){
-            LU_ASSERT(config.name.size() > 0, "App", "registerVideo", "VideoConfig.name must be size bigger 0");
-            LU_ASSERT(config.filePath.size() > 0, "App", "registerVideo", "VideoConfig.filePath must be size bigger 0");
-            LU_ASSERT(!world->lookup(config.name.c_str()), "App", "registerVideo", "Entity with name: " + config.name + " already exists");
-            const std::string textureName = config.name + "::Texture";
-            LU_ASSERT(!world->lookup(textureName.c_str()), "App", "registerVideo", "Entity with name: " + textureName + " already exists");
-
-            flecs::entity video = world->entity(config.name.c_str());
-            renderer->createVideo(video.id(), world->entity(textureName.c_str()).id(), config);
-            video.set<Component::VideoPlayback>({config.autoplay, config.loop, config.speed});
-
-            return *this;
-        }
-
-        App& registerVideo(const std::string& name, const std::string& filePath, const bool loop = true){
-            VideoConfig config;
-            config.name = name;
-            config.filePath = filePath;
-            config.loop = loop;
-            return registerVideo(config);
-        }
-
         App& loadModel(const std::string& name, const std::string& filePath,
             const std::string& prefix = "Mesh::",
             const std::string& pipelineName = "MeshPipe::Simple") {
@@ -320,7 +291,6 @@ namespace Lu{
             world->import<Module::Material>();
             world->import<Module::Light>();
             world->import<Module::InputState>();
-            world->import<Module::Video>();
             // 2D: Transform2D before Text, so the Transform2D slot exists on the renderer side before CreateText arrives
             world->import<Module::Transform2D>();
             world->import<Module::Transform2DGpu>();

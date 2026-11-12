@@ -166,12 +166,8 @@ namespace Lu{
             }
 
             void create();
-            // `srcStage`: stages of EARLIER commands that must be finished before the image is overwritten. The default
-            // is right for a texture that was never used. A texture that is overwritten every frame (VideoPackage) is
-            // still sampled by the previous frame in flight: pass VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT.
             void recordCopy(VkCommandBuffer commandBuffer, VkBuffer sourceBuffer,
-                VkDeviceSize sourceOffset = 0,
-                VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) const;
+                VkDeviceSize sourceOffset = 0) const;
             void destroy();
         };
 
