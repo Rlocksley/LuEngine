@@ -41,10 +41,11 @@ struct Mesh2D{
     uint pipelineId;
     uint meshInfoId;
     uint valid;
-    uint clipTransform2DId;   // slot of the Transform2D that is the clip rectangle, 0xFFFFFFFF = none
+    uint clip2DId;
     uint pad1;
     uint pad2;
 };
+struct Clip2D { vec2 position; vec2 size; };
 
 layout(set = 0, binding = 0) uniform Camera2DBuffer {
     mat4 viewProjection;  // world pixels -> clip space xy
@@ -64,6 +65,7 @@ layout(set = 0, binding = 1) readonly buffer Transform2DBuffer {
 layout(set = 0, binding = 2) readonly buffer Mesh2DBuffer {
     Mesh2D meshes[];
 } meshes;
+layout(set = 0, binding = 4) readonly buffer Clip2DBuffer { Clip2D clips[]; } clip2Darray;
 
 // must match TRANSFORM_2D_LAYER_COUNT in Constant.hpp (same mapping as font_basic.vert: text and meshes share the depth)
 const float LAYER_COUNT = 65536.0;
@@ -93,12 +95,8 @@ void main() {
     outMeshId = gl_InstanceIndex;
 
     outClip = vec2(0.5);
-    if (mesh.clipTransform2DId != 0xFFFFFFFFu) {
-        mat4 clipModel = transforms.transforms[mesh.clipTransform2DId].model;
-        if (abs(determinant(mat2(clipModel))) > 1e-12) {
-            outClip = (inverse(clipModel) * vec4(world, 0.0, 1.0)).xy;
-        } else {
-            outClip = vec2(-1.0);     // a clip rectangle without area clips everything
-        }
+    if (mesh.clip2DId != 0xFFFFFFFFu) {
+        Clip2D rect = clip2Darray.clips[mesh.clip2DId];
+        outClip = all(greaterThan(rect.size, vec2(0.0))) ? (world - rect.position) / rect.size : vec2(-1.0);
     }
 }

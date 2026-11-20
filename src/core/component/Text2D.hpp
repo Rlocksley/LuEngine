@@ -18,7 +18,7 @@ namespace Lu{
         // The text block starts at the Transform2D position: x = line start (see TextAlign),
         // y = top of the first line. Every character occupies one Font struct in the FontBuffer
         // of the renderer; changing the string simply sends a new EcsRequest::CreateText.
-        struct Text{
+        struct Text2D{
             std::string text;               // UTF-8, '\n' starts a new line
             flecs::entity font;             // registered with App::registerFont(...)
             flecs::entity pipeline;         // registered with App::registerFontPipe(...)
@@ -31,13 +31,10 @@ namespace Lu{
             // 0 = no wrapping, only '\n' starts a new line. Combine with `align` for left / centered / right aligned paragraphs
             // (Center / Right anchor the lines at the Transform2D position, so for a centered box put it in the middle of the box).
             float maxWidth{0.f};
-            // Optional clip rectangle for clipping pipelines (see shader/font_clip.*): an entity with a Transform2D AND a
-            // Transform2DGpu. Only the part of the glyphs inside the unit square (0,0)..(1,1) of the local space of that
-            // transform is drawn (position / scale / rotation of that entity = position / size / rotation of the rectangle).
-            // 0 = no clipping. The shaders font_basic.* ignore it.
+            // Optional Clip2D entity used by clipping pipelines. 0 = no clipping.
             flecs::entity clip;
         };
 
-        struct TextGpuDirty{};
+        struct Text2DGpuDirty{};
     }
 }

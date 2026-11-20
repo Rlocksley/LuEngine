@@ -2,7 +2,7 @@
 
 #include "Global.hpp"
 #include "FontAtlas.hpp"
-#include "component/Text.hpp"
+#include "component/Text2D.hpp"
 
 namespace Lu{
     namespace Core{
@@ -53,7 +53,7 @@ namespace Lu{
         inline std::vector<Font> layoutText(const FontData& font, const std::vector<uint32_t>& codepoints,
                         const uint32_t transform2DId, const uint32_t pipeId, const glm::vec4& color,
                         const float size, const float lineSpacing, const TextAlign align,
-                        const float maxWidth = 0.0f, const uint32_t clipTransform2DId = UINT32_MAX)
+                        const float maxWidth = 0.0f, const uint32_t clip2DId = UINT32_MAX)
             {
                 const uint32_t count = static_cast<uint32_t>(codepoints.size());
                 std::vector<Font> result(count);
@@ -146,7 +146,7 @@ namespace Lu{
                     glyph.color = color;
                     glyph.textureId = font.textureId;
                     glyph.transform2DId = transform2DId;
-                    glyph.clipTransform2DId = clipTransform2DId;
+                    glyph.clip2DId = clip2DId;
                     glyph.pipelineId = pipeId;
                     glyph.glyphIndex = i;
                     glyph.glyphCount = count;

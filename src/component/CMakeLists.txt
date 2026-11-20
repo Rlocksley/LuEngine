@@ -7,7 +7,8 @@ Component.cpp
 UICore.hpp
 UIDisplay.hpp
 UIWindow.hpp
-Button.hpp
+UIButton.hpp
+ClickBox2D.hpp
 Toggle.hpp
 Slider.hpp
 TextInput.hpp

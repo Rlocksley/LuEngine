@@ -34,7 +34,7 @@ namespace Lu{
             skeleton(camera, lights, transform, texture, skeletonGeometry),
             camera2D(),
             transform2D(),
-            font(camera2D, transform2D, texture),
+            font(camera2D, transform2D, clip2D, texture),
             text(camera2D, transform2D, font),
             mesh2DGeometry(
                 MAX_MESH2D_VERTEX_BUFFER_SIZE,
@@ -43,7 +43,7 @@ namespace Lu{
                 MAX_INDICES_PER_MESH_2D,
                 MAX_MESH2D_INFOS
             ),
-            mesh2D(camera2D, transform2D, texture, mesh2DGeometry) {
+            mesh2D(camera2D, transform2D, clip2D, texture, mesh2DGeometry) {
         }
 
         Renderer::~Renderer() {
@@ -268,6 +268,9 @@ namespace Lu{
                             transform2D.destroyTransform2D(req.entity);
                         },
 
+                        [&](const EcsRequest::CreateClip2D& req){ clip2D.createClip2D(req.entity, req.clip); },
+                        [&](const EcsRequest::DestroyClip2D& req){ clip2D.destroyClip2D(req.entity); },
+
                         [&](const EcsRequest::CreateText& req){
                             text.createText(
                                 req.entity,
@@ -275,7 +278,7 @@ namespace Lu{
                                 font.getFontId(req.font),
                                 font.getFontPipeId(req.pipe),
                                 req.text, req.color, req.size, req.lineSpacing, req.align, req.maxWidth,
-                                req.clip != 0 ? transform2D.getTransform2DId(req.clip) : UINT32_MAX
+                                req.clip != 0 ? clip2D.getClip2DId(req.clip) : UINT32_MAX
                             );
                         },
 
@@ -290,7 +293,7 @@ namespace Lu{
                                 mesh2DGeometry.getGeometryInfoId(req.mesh),
                                 req.texture != 0 ? texture.getTextureId(req.texture) : UINT32_MAX,
                                 req.color, req.uvRect, req.params,
-                                req.clip != 0 ? transform2D.getTransform2DId(req.clip) : UINT32_MAX
+                                req.clip != 0 ? clip2D.getClip2DId(req.clip) : UINT32_MAX
                             );
                         },
 
@@ -316,7 +319,7 @@ namespace Lu{
                     request.cullSphere
                 );
             }
-            
+
             // Apply the latest dynamic transforms after lifecycle requests have
             // established or removed entity-to-transform ID mappings.
             transform.updateTransforms();
@@ -331,6 +334,7 @@ namespace Lu{
             multiMesh.collectDirty(frameIndex);
             skeleton.collectDirty(frameIndex);
             transform2D.collectDirty(frameIndex);
+            clip2D.collectDirty(frameIndex);
             text.collectDirty(frameIndex);
             mesh2D.collectDirty(frameIndex);
         }
@@ -344,13 +348,13 @@ namespace Lu{
                 depthMapExtent = {depthMap.width, depthMap.height};
                 depthMapInitialized = false;
             }
-            
+
             const auto& cmd = command[frameIndex];
 
             //begin command buffer recording
             cmd.begin();
 
-            
+
             //Copy To GPU
             meshGeometry.copy(frameIndex, cmd);
             mesh2DGeometry.copy(frameIndex, cmd);
@@ -364,9 +368,10 @@ namespace Lu{
             skeleton.copy(frameIndex, cmd);
             camera2D.copy(frameIndex, cmd);
             transform2D.copy(frameIndex, cmd);
+            clip2D.copy(frameIndex, cmd);
             text.copy(frameIndex, cmd);
             mesh2D.copy(frameIndex, cmd);
-            
+
             //Pipeline Barrier
             copyBarrier(cmd);
 
@@ -377,10 +382,11 @@ namespace Lu{
             transform.transfer(frameIndex, cmd);
             mesh.transfer(frameIndex, cmd);
             multiMesh.transfer(frameIndex, cmd);
-            skeleton.transfer(frameIndex, cmd);   // poses -> SkeletonBuffer, mesh instances
+            skeleton.transfer(frameIndex, cmd);   // poses -> SkeletonBuffer
             transform2D.transfer(frameIndex, cmd);
+            clip2D.transfer(frameIndex, cmd);
             text.transfer(frameIndex, cmd);       // glyph instances -> FontBuffer
-            mesh2D.transfer(frameIndex, cmd);     // Mesh2D instances -> Mesh2DBuffer
+            mesh2D.transfer(frameIndex, cmd);
 
             //Pipeline Barrier
             transferBarrier(cmd);
@@ -390,7 +396,7 @@ namespace Lu{
             multiMesh.cull(frameIndex, cmd);
             skeleton.cull(frameIndex, cmd);
             text.cull(frameIndex, cmd);           // one indirect draw command per visible glyph
-            mesh2D.cull(frameIndex, cmd);         // one indirect draw command per visible Mesh2D
+            mesh2D.cull(frameIndex, cmd);
 
             //Pipeline Barrier
             cullBarrier(cmd);
@@ -411,13 +417,7 @@ namespace Lu{
             // Cull lights against the depth prepass.
             lights.cull(frameIndex, cmd);
 
-            recordBarrier(
-                cmd.vkCommandBuffer,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                VK_ACCESS_SHADER_WRITE_BIT,
-                VK_ACCESS_SHADER_READ_BIT
-            );
+            beginRendereringBarrier(cmd);
 
             //begin dynamic rendering
             beginRendering(cmd);
@@ -539,7 +539,7 @@ namespace Lu{
 
 
         void Renderer::beginRendering(const Command& cmd){
-            
+
             const uint32_t imageIndex = swapchain.imageIndex;
             const bool multisampled = vkSampleCountFlagBits != VK_SAMPLE_COUNT_1_BIT;
             const VkImage colorImage = multisampled
@@ -634,7 +634,7 @@ namespace Lu{
         }
 
         void Renderer::endRendering(const Command& cmd){
-            
+
             const uint32_t imageIndex = swapchain.imageIndex;
             vkCmdEndRendering(cmd.vkCommandBuffer);
 
@@ -697,6 +697,16 @@ namespace Lu{
                 VK_ACCESS_INDIRECT_COMMAND_READ_BIT |
                     VK_ACCESS_SHADER_READ_BIT |
                     VK_ACCESS_COMMAND_PREPROCESS_READ_BIT_EXT
+            );
+        }
+
+        void Renderer::beginRendereringBarrier(const Command& cmd) {
+            recordBarrier(
+                cmd.vkCommandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_ACCESS_SHADER_WRITE_BIT,
+                VK_ACCESS_SHADER_READ_BIT
             );
         }
 

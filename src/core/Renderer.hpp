@@ -14,6 +14,7 @@
 #include "TexturePackage.hpp"
 #include "Camera2DPackage.hpp"
 #include "Transform2DPackage.hpp"
+#include "Clip2DPackage.hpp"
 #include "FontPackage.hpp"
 #include "TextPackage.hpp"
 #include "Mesh2DPackage.hpp"
@@ -93,6 +94,7 @@ namespace Lu{
             // 2D: Camera2D, Transform2D, fonts (atlas, FontBuffer, font pipelines) and Text
             Camera2DPackage camera2D;
             Transform2DPackage transform2D;
+            Clip2DPackage clip2D;
             FontPackage font;
             TextPackage text;
 
@@ -110,7 +112,7 @@ namespace Lu{
             static void copyBarrier(const Command& cmd);
             static void transferBarrier(const Command& cmd);
             static void cullBarrier(const Command& cmd);
-            
+            static void beginRendereringBarrier(const Command& cmd);
             static void recordBarrier(
                 VkCommandBuffer commandBuffer,
                 VkPipelineStageFlags srcStage,

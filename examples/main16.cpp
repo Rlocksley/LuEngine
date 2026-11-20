@@ -70,7 +70,7 @@ struct GuiDemoModule {
                 .set<Lu::Component::Transform2D>(transform)
                 .add<Lu::Component::Transform2DGpu>()
             })
-            .set(Lu::Component::Text{
+            .set(Lu::Component::Text2D{
                 .text = string,
                 .font = world.lookup("Font::Main"),
                 .pipeline = world.lookup("FontPipe::Basic"),

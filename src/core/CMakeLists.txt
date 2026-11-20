@@ -68,6 +68,7 @@ Channel.hpp
 Camera2DData.hpp
 Camera2DPackage.hpp
 Transform2DPackage.hpp
+Clip2DPackage.hpp
 FontPackage.hpp
 FontPackage.cpp
 FontAtlas.hpp

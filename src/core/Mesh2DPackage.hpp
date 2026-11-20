@@ -12,6 +12,7 @@
 #include "instance/Mesh2DInstance.hpp"
 #include "Camera2DPackage.hpp"
 #include "Transform2DPackage.hpp"
+#include "Clip2DPackage.hpp"
 #include "GeometryPackage.hpp"
 #include "TexturePackage.hpp"
 #include "PipelineConfig.hpp"
@@ -62,7 +63,7 @@ namespace Lu{
             uint32_t instanceBufferSize{0};
 
         public:
-            Mesh2DPackage(const Camera2DPackage& camera2D, const Transform2DPackage& transforms2D,
+            Mesh2DPackage(const Camera2DPackage& camera2D, const Transform2DPackage& transforms2D, const Clip2DPackage& clips2D,
                           const TexturePackage& textures, const GeometryPackage<Vertex::Vertex2D>& geometry)
                 : instanceBuffer(MAX_ECS_REQUESTS_PROCESSED_PER_FRAME * MAX_FRAMES_IN_FLIGHT, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT),
                 meshBuffer(MAX_MESHES_2D, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT),
@@ -90,7 +91,7 @@ namespace Lu{
 
                 createTransferPipe();
                 createCullPipe(camera2D, transforms2D, geometry);
-                createMeshDescriptorSet(camera2D, transforms2D, textures);
+                createMeshDescriptorSet(camera2D, transforms2D, clips2D, textures);
             }
 
             Mesh2DPipeId getMesh2DPipeId(const Mesh2DPipeEntity entity) const {
@@ -136,13 +137,14 @@ namespace Lu{
                 );
             }
 
-            void createMeshDescriptorSet(const Camera2DPackage& camera2D, const Transform2DPackage& transforms2D,
+            void createMeshDescriptorSet(const Camera2DPackage& camera2D, const Transform2DPackage& transforms2D, const Clip2DPackage& clips2D,
                                          const TexturePackage& textures) {
                 meshDescrSet
                 .addUniformBuffer(0, camera2D.getCameraBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
                 .addStorageBuffer(1, transforms2D.getTransform2DBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
                 .addStorageBuffer(2, meshBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
                 .addTextureArray(3, textures.getTextureArray(), VK_SHADER_STAGE_FRAGMENT_BIT)
+                .addStorageBuffer(4, clips2D.getClip2DBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
                 .build();
             }
 
@@ -179,7 +181,7 @@ namespace Lu{
                               const Transform2DId transform2DId, const GeometryInfoId meshInfoId,
                               const uint32_t textureId, const glm::vec4& color,
                               const glm::vec4& uvRect, const glm::vec4& params,
-                              const uint32_t clipTransform2DId = UINT32_MAX) {
+                              const uint32_t clip2DId = UINT32_MAX) {
                 const Mesh2DPipeId pipeId = getMesh2DPipeId(pipeEntity);
 
                 Mesh2DId id;
@@ -191,7 +193,7 @@ namespace Lu{
                 } else {
                     id = it->second;
                 }
-                meshes[id] = Mesh2D(color, uvRect, params, textureId, transform2DId, pipeId, meshInfoId, clipTransform2DId);
+                meshes[id] = Mesh2D(color, uvRect, params, textureId, transform2DId, pipeId, meshInfoId, clip2DId);
                 dirty.mark(id);
             }
 

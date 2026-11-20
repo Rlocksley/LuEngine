@@ -6,7 +6,7 @@
 namespace Lu{
     namespace Core{
 
-        FontPackage::FontPackage(const Camera2DPackage& camera2D, const Transform2DPackage& transforms2D, const TexturePackage& textures)
+        FontPackage::FontPackage(const Camera2DPackage& camera2D, const Transform2DPackage& transforms2D, const Clip2DPackage& clips2D, const TexturePackage& textures)
             : fontBuffer(MAX_FONT_GLYPHS, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT)
         {
             FT_Library library = nullptr;
@@ -38,6 +38,7 @@ namespace Lu{
             .addStorageBuffer(1, transforms2D.getTransform2DBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .addStorageBuffer(2, fontBuffer, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .addTextureArray(3, textures.getTextureArray(), VK_SHADER_STAGE_FRAGMENT_BIT)
+            .addStorageBuffer(4, clips2D.getClip2DBuffer(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
             .build();
         }
 

@@ -11,6 +11,7 @@
 #include "modul/MultiMeshGpuModule.hpp"
 #include "modul/LightModule.hpp"
 #include "modul/Transform2DGpuModule.hpp"
+#include "modul/Clip2DModule.hpp"
 #include "modul/Camera2DModule.hpp"
 #include "modul/TextModule.hpp"
 #include "modul/Mesh2DModule.hpp"
@@ -294,6 +295,7 @@ namespace Lu{
             // 2D: Transform2D before Text, so the Transform2D slot exists on the renderer side before CreateText arrives
             world->import<Module::Transform2D>();
             world->import<Module::Transform2DGpu>();
+            world->import<Module::Clip2D>();
             world->import<Module::Camera2D>();
             world->import<Module::Text>();
             world->import<Module::Mesh2D>();

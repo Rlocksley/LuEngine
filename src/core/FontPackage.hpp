@@ -12,6 +12,7 @@
 #include "instance/FontInstance.hpp"
 #include "Camera2DPackage.hpp"
 #include "Transform2DPackage.hpp"
+#include "Clip2DPackage.hpp"
 #include "TexturePackage.hpp"
 #include "FontAtlas.hpp"
 
@@ -47,7 +48,7 @@ namespace Lu{
             std::unordered_map<FontPipeEntity, FontPipeId> entityToPipeId;
 
         public:
-            FontPackage(const Camera2DPackage& camera2D, const Transform2DPackage& transforms2D, const TexturePackage& textures);
+            FontPackage(const Camera2DPackage& camera2D, const Transform2DPackage& transforms2D, const Clip2DPackage& clips2D, const TexturePackage& textures);
             ~FontPackage();
 
             FontPackage(const FontPackage&) = delete;

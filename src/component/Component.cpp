@@ -1,7 +1,7 @@
 #include "UICore.hpp"
 #include "UIDisplay.hpp"
 #include "UIWindow.hpp"
-#include "Button.hpp"
+#include "UIButton.hpp"
 #include "Toggle.hpp"
 #include "Slider.hpp"
 #include "TextInput.hpp"

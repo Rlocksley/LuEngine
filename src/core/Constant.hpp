@@ -41,6 +41,7 @@ namespace Lu{
 
         // ---- 2D / Text ----------------------------------------------------
         const uint32_t MAX_TRANSFORMS_2D = 1024 * 16;         // live Transform2D components
+        const uint32_t MAX_CLIPS_2D = 1024 * 16;
         const uint32_t MAX_FONTS = 64;                        // registered fonts (each one atlas texture, see MAX_TEXTURES)
         const uint32_t MAX_FONT_PIPELINES = 64;
         // capacity of the FontBuffer = glyph structs of ALL texts. It is also the capacity of the per-frame

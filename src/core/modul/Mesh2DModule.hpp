@@ -3,6 +3,7 @@
 #include "flecs.h"
 #include "Channel.hpp"
 #include "component/Mesh2D.hpp"
+#include "component/Clip2D.hpp"
 #include "component/Transform2D.hpp"
 #include "component/Transform2DGpu.hpp"
 
@@ -14,6 +15,20 @@ namespace Module {
     struct Mesh2D{
         Mesh2D(flecs::world& world){
             world.component<Component::Mesh2D>();
+
+            // Inherit the nearest ancestor Clip2D only when the Mesh2D has no explicit clip.
+            // The optional .up() term also matches entities with no Clip2D ancestor; those keep
+            // their component clip unchanged (including the invalid/no-clip value).
+            world.observer<Component::Mesh2D, const Component::Clip2D*>()
+                .term_at(1).up().optional()
+                .event(flecs::OnAdd)
+                .event(flecs::OnSet)
+                .each([](flecs::iter& it, size_t row, Component::Mesh2D& mesh, const Component::Clip2D* ancestorClip) {
+                    if (mesh.clip.id() != 0 || ancestorClip == nullptr) return;
+                    auto entity = it.entity(row);
+                    mesh.clip = it.src(1);
+                    entity.modified<Component::Mesh2D>();
+                });
 
             // Mesh2D added / changed while the parent has a Transform2D and a Transform2DGpu
             world.observer<const Component::Mesh2D>()

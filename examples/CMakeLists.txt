@@ -27,8 +27,8 @@ target_link_libraries(lu_example1 PRIVATE
     flecs::flecs
 )
 
-add_executable(lu_example4 main18.cpp)
-target_include_directories(lu_example4 PUBLIC ../src/core ../src/shape ../src/app ../src/physics ../src ../src/component ../src/module)
+add_executable(lu_example4 main19.cpp)
+target_include_directories(lu_example4 PUBLIC ../src/core ../src/shape ../src/app ../src/physics ../src ../src/component)
 target_link_libraries(lu_example4 PRIVATE
     Vulkan::Vulkan
     glm::glm
@@ -38,117 +38,7 @@ target_link_libraries(lu_example4 PRIVATE
     lu_app
     lu_physics
     lu_component
-    lu_module
-    flecs::flecs
-)
-
-add_executable(lu_example5 main5.cpp)
-target_include_directories(lu_example5 PUBLIC ../src/core ../src/shape ../src/app)
-target_link_libraries(lu_example5 PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
-    flecs::flecs
-)
-
-add_executable(lu_example6 main6.cpp)
-target_include_directories(lu_example6 PUBLIC ../src/core ../src/shape ../src/app ../src)
-target_link_libraries(lu_example6 PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
-    flecs::flecs
-)
-
-add_executable(lu_example8 main8.cpp)
-target_include_directories(lu_example8 PUBLIC ../src/core ../src/shape ../src/app ../src)
-target_link_libraries(lu_example8 PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
-    flecs::flecs
-)
-
-add_executable(lu_example9 main9.cpp)
-target_include_directories(lu_example9 PUBLIC ../src/core ../src/shape ../src/app ../src)
-target_link_libraries(lu_example9 PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
-    flecs::flecs
-)
-
-add_executable(lu_example13 main13.cpp)
-target_include_directories(lu_example13 PUBLIC ../src/core ../src/shape ../src/app ../src/physics)
-target_link_libraries(lu_example13 PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
-    lu_physics
-    flecs::flecs
-)
-
-add_executable(lu_example14 main14.cpp)
-target_include_directories(lu_example14 PUBLIC ../src/core ../src/shape ../src/app ../src/physics ../src)
-target_link_libraries(lu_example14 PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
-    lu_physics
-    flecs::flecs
-)
-
-add_executable(lu_example15 main15.cpp)
-target_include_directories(lu_example15 PUBLIC ../src/core ../src/shape ../src/app)
-target_link_libraries(lu_example15 PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
-    flecs::flecs
-)
-
-add_executable(lu_example16 main16.cpp)
-target_include_directories(lu_example16 PUBLIC ../src/core ../src/shape ../src/app)
-target_link_libraries(lu_example16 PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
     flecs::flecs
 )
 
 
-add_executable(lu_example_ui main_ui.cpp)
-target_include_directories(lu_example_ui PUBLIC ../src/core ../src/shape ../src/app ../src ../src/component ../src/module)
-target_link_libraries(lu_example_ui PRIVATE
-    Vulkan::Vulkan
-    glm::glm
-    glfw
-    lu_core
-    lu_shape
-    lu_app
-    flecs::flecs
-)

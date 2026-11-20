@@ -9,8 +9,9 @@
 #include "CameraData.hpp"
 #include "Camera2DData.hpp"
 #include "component/Transform2D.hpp"
-#include "component/Text.hpp"
+#include "component/Text2D.hpp"
 #include "component/Mesh2D.hpp"
+#include "component/Clip2D.hpp"
 
 namespace Lu{
 
@@ -123,6 +124,9 @@ namespace Lu{
             flecs::entity_t entity;
         };
 
+        struct CreateClip2D { flecs::entity_t entity; Component::Clip2D clip; };
+        struct DestroyClip2D { flecs::entity_t entity; };
+
         // Upsert: the first request creates the text, later requests for the same entity update it
         // (new string -> the n Font structs in the FontBuffer are re-allocated if n changed).
         struct CreateText{
@@ -136,7 +140,7 @@ namespace Lu{
             float lineSpacing;
             TextAlign align;
             float maxWidth;             // 0 = no word wrapping
-            flecs::entity_t clip;       // entity with the Transform2D that is the clip rectangle, 0 = none
+            flecs::entity_t clip;       // Clip2D entity, 0 = none
         };
 
         struct DestroyText{
@@ -153,7 +157,7 @@ namespace Lu{
             glm::vec4 color;
             glm::vec4 uvRect;
             glm::vec4 params;
-            flecs::entity_t clip;       // entity with the Transform2D that is the clip rectangle, 0 = none
+            flecs::entity_t clip;       // Clip2D entity, 0 = none
         };
 
         struct DestroyMesh2D{
@@ -200,7 +204,7 @@ namespace Lu{
 
         using EcsRequest = std::variant<CreateTransform, DestroyTransform, CreateMeshTransform, DestroyMeshTransform, CreateMesh, DestroyMesh, CreateMultiMesh, DestroyMultiMesh, CreateLight, DestroyLight, UpdateCamera,
             CreateSkeleton, DestroySkeleton, CreateSkeletonMesh, DestroySkeletonMesh,
-            CreateTransform2D, UpdateTransform2D, DestroyTransform2D, CreateText, DestroyText, UpdateCamera2D, CreateMesh2D, DestroyMesh2D>;
+            CreateTransform2D, UpdateTransform2D, DestroyTransform2D, CreateClip2D, DestroyClip2D, CreateText, DestroyText, UpdateCamera2D, CreateMesh2D, DestroyMesh2D>;
 
     }
 

@@ -60,7 +60,7 @@ struct TextDemoModule {
                 .set<Lu::Component::Transform2D>(transform)
                 .add<Lu::Component::Transform2DGpu>()      // mirrored by the GPU (like TransformGpu)
             })
-            .set(Lu::Component::Text{
+            .set(Lu::Component::Text2D{
                 .text = string,
                 .font = world.lookup("Font::Main"),
                 .pipeline = world.lookup("FontPipe::Basic"),
@@ -141,14 +141,14 @@ struct TextDemoModule {
         )
         .add<ClockTag>();
 
-        world.system<Lu::Component::Text>("UpdateClock")
+        world.system<Lu::Component::Text2D>("UpdateClock")
             .with<ClockTag>()
             .interval(0.1f)
-            .each([](flecs::entity e, Lu::Component::Text& text) {
+            .each([](flecs::entity e, Lu::Component::Text2D& text) {
                 char buffer[64];
                 std::snprintf(buffer, sizeof(buffer), "Time: %5.1f s", e.world().get_info()->world_time_total);
                 text.text = buffer;
-                e.modified<Lu::Component::Text>();
+                e.modified<Lu::Component::Text2D>();
             });
 
         // UTF-8 + multiple lines + line spacing

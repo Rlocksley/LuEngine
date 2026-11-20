@@ -4,7 +4,7 @@
 #include "flecs.h"
 #include "component/Transform2D.hpp"
 #include "component/Mesh2D.hpp"
-#include "component/Text.hpp"
+#include "component/Text2D.hpp"
 
 #include <array>
 #include <functional>

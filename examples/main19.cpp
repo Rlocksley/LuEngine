@@ -1,0 +1,274 @@
+#include "App.hpp"
+#include "Shape2D.hpp"
+#include "module/ButtonModule.hpp"
+#include "component/Transform2D.hpp"
+#include "component/Transform2DGpu.hpp"
+#include "component/Mesh2D.hpp"
+#include "component/Text2D.hpp"
+#include <filesystem>
+
+namespace Demo {
+struct GlowLayer {};
+
+static std::string findFont() {
+    for (const auto& path : {"C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/segoeui.ttf"})
+        if (std::filesystem::exists(path)) return path;
+    return {};
+}
+
+// Apply one button's SDF treatment. The button owns a crisp body and a separate
+// soft SDF layer; callbacks decide their colors, gradient, glow, and depression.
+static void style(flecs::entity owner, glm::vec4 fill, float gradient,
+                  glm::vec4 glow, float glowAlpha, float offsetY) {
+    owner.children([&](flecs::entity part) {
+        if (part.has<GlowLayer>()) {
+            if (auto* transform = part.try_get<Lu::Component::Transform2D>()) {
+                auto updated = *transform;
+                if (updated.position.y != -12.f) {
+                    updated.position.y = -12.f;
+                    part.set<Lu::Component::Transform2D>(updated);
+                }
+            }
+            part.children([&](flecs::entity leaf) {
+                if (auto* mesh = leaf.try_get<Lu::Component::Mesh2D>()) {
+                    auto updated = *mesh;
+                    const glm::vec4 color{glow.r, glow.g, glow.b, glowAlpha};
+                    if (updated.color.r != color.r || updated.color.g != color.g ||
+                        updated.color.b != color.b || updated.color.a != color.a ||
+                        updated.params.x != 18.f || updated.params.y != 12.f ||
+                        updated.params.z != 9.f || updated.params.w != 0.f) {
+                        updated.color = color;
+                        updated.params = {18.f, 12.f, 9.f, 0.f};
+                        leaf.set<Lu::Component::Mesh2D>(updated);
+                    }
+                }
+            });
+        } else {
+            if (auto* transform = part.try_get<Lu::Component::Transform2D>()) {
+                auto updated = *transform;
+                if (updated.position.y != offsetY) {
+                    updated.position.y = offsetY;
+                    part.set<Lu::Component::Transform2D>(updated);
+                }
+            }
+            part.children([&](flecs::entity leaf) {
+                if (auto* mesh = leaf.try_get<Lu::Component::Mesh2D>()) {
+                    auto updated = *mesh;
+                    if (updated.color.r != fill.r || updated.color.g != fill.g ||
+                        updated.color.b != fill.b || updated.color.a != fill.a ||
+                        updated.params.w != gradient) {
+                        updated.color = fill;
+                        updated.params.w = gradient;
+                        leaf.set<Lu::Component::Mesh2D>(updated);
+                    }
+                }
+            });
+        }
+    });
+}
+
+static void addGlow(flecs::world& world, flecs::entity owner,
+                    flecs::entity mesh, flecs::entity softPipeline,
+                    glm::vec2 size) {
+    auto layer = world.entity().set(flecs::Parent{owner})
+        .add<GlowLayer>()
+        .set<Lu::Component::Transform2D>({.position={-12.f,-12.f}, .positionZ=0,
+            .scale=size + glm::vec2(24.f)})
+        .add<Lu::Component::Transform2DGpu>();
+    world.entity().set(flecs::Parent{layer}).set(Lu::Component::Mesh2D{
+        .mesh=mesh, .pipeline=softPipeline, .color={0.4f,0.7f,1.f,0.f}, .params={18.f,12.f,9.f,0.f}
+    });
+}
+
+struct ButtonDemo {
+    explicit ButtonDemo(flecs::world& world) {
+        world.component<GlowLayer>();
+        const auto mesh = world.lookup("Mesh2D::Button");
+        const auto sdf = world.lookup("Mesh2DPipe::SDF");
+        const auto softSdf = world.lookup("Mesh2DPipe::SDFSoft");
+        const auto font = world.lookup("Font::Main");
+        const auto textPipe = world.lookup("FontPipe::Basic");
+
+        auto titleTransform = world.entity("TitleTransform")
+            .set<Lu::Component::Transform2D>({.position={56.f,28.f}, .positionZ=20})
+            .add<Lu::Component::Transform2DGpu>();
+        world.entity("TitleText").set(flecs::Parent{titleTransform})
+            .set(Lu::Component::Text2D{.text="MODULAR BUTTONS", .font=font, .pipeline=textPipe,
+                .color={0.78f,0.88f,1.f,1.f}, .size=30.f});
+
+        auto statusTransform = world.entity("StatusTransform")
+            .set<Lu::Component::Transform2D>({.position={370.f,92.f}, .positionZ=20})
+            .add<Lu::Component::Transform2DGpu>();
+        auto status = world.entity("StatusText").set(flecs::Parent{statusTransform})
+            .set(Lu::Component::Text2D{.text="Choose a button", .font=font, .pipeline=textPipe,
+                .color={0.92f,0.88f,0.72f,1.f}, .size=22.f});
+
+        auto rotating = world.entity("RotatingMeshTransform")
+            .set<Lu::Component::Transform2D>({.position={650.f,360.f}, .positionZ=2, .scale={132.f,132.f}})
+            .add<Lu::Component::Transform2DGpu>();
+        world.entity("RotatingMesh").set(flecs::Parent{rotating})
+            .set(Lu::Component::Mesh2D{.mesh=mesh, .pipeline=sdf,
+                .color={0.22f,0.67f,0.93f,1.f}, .params={12.f,2.f,0.f,0.15f}});
+        auto hintTransform = world.entity("SpinHintTransform")
+            .set<Lu::Component::Transform2D>({.position={552.f,445.f}, .positionZ=3})
+            .add<Lu::Component::Transform2DGpu>();
+        world.entity("SpinHint").set(flecs::Parent{hintTransform})
+            .set(Lu::Component::Text2D{.text="Toggle keeps it spinning", .font=font,
+                .pipeline=textPipe, .color={0.62f,0.76f,0.86f,1.f}, .size=17.f});
+
+        auto addButton = [&](const char* name, const char* label, float y,
+                             Lu::Component::UIButtonMode mode,
+                             std::function<void(flecs::entity)> onClicked,
+                             std::function<void(flecs::entity)> onHoverEnter,
+                             std::function<void(flecs::entity)> onHover,
+                             std::function<void(flecs::entity)> onHoverExit,
+                             std::function<void(flecs::entity)> onRelease,
+                             bool selected=false, uint32_t group=0) {
+            const glm::vec2 size{228.f,54.f};
+            auto entity = world.entity(name)
+                .set<Lu::Component::Transform2D>({.position={56.f,y}, .positionZ=10})
+                .add<Lu::Component::Transform2DGpu>()
+                .set(Lu::Component::UIButton{
+                    .mesh=mesh, .meshPipeline=sdf, .font=font, .fontPipeline=textPipe,
+                    .text=label, .color={0.10f,0.16f,0.24f,1.f}, .textColor={0.91f,0.94f,0.98f,1.f},
+                    .fontSize=19.f, .meshParams={10.f,2.f,0.f,0.08f},
+                    .textTransform={.position={114.f,16.f}, .positionZ=2},
+                    .selected=selected, .mode=mode, .radioGroup=group, .size=size,
+                    .onClicked=std::move(onClicked), .onHover=std::move(onHover),
+                    .onHoverEnter=std::move(onHoverEnter), .onHoverExit=std::move(onHoverExit),
+                    .onRelease=std::move(onRelease)
+                });
+            addGlow(world, entity, mesh, softSdf, size);
+            return entity;
+        };
+
+        auto setStatus = [status, font, textPipe](const char* message) {
+            status.set<Lu::Component::Text2D>({.text=message, .font=font, .pipeline=textPipe,
+                .color={0.92f,0.88f,0.72f,1.f}, .size=22.f});
+        };
+
+        addButton("MomentaryButton", "Momentary", 104.f, Lu::Component::UIButtonMode::Momentary,
+            [setStatus](flecs::entity e) { setStatus("Pressed: brief cyan flare"); style(e,{0.12f,0.62f,0.78f,1.f},-0.22f,{0.18f,0.84f,1.f,1.f},0.8f,3.f); },
+            [](flecs::entity e) { style(e,{0.16f,0.28f,0.38f,1.f},0.18f,{0.22f,0.72f,0.95f,1.f},0.42f,-1.f); },
+            [](flecs::entity e) {
+                if (e.get<Lu::Component::UIButton>().pressed)
+                    style(e,{0.12f,0.62f,0.78f,1.f},-0.22f,{0.18f,0.84f,1.f,1.f},0.8f,3.f);
+                else style(e,{0.16f,0.28f,0.38f,1.f},0.14f,{0.22f,0.72f,0.95f,1.f},0.36f,-1.f);
+            },
+            [](flecs::entity e) {
+                if (e.get<Lu::Component::UIButton>().pressed)
+                    style(e,{0.12f,0.62f,0.78f,1.f},-0.22f,{0.18f,0.84f,1.f,1.f},0.8f,3.f);
+                else style(e,{0.10f,0.16f,0.24f,1.f},0.08f,{0.22f,0.72f,0.95f,1.f},0.f,0.f);
+            },
+            [](flecs::entity e) { style(e,{0.10f,0.16f,0.24f,1.f},0.08f,{0.22f,0.72f,0.95f,1.f},0.f,0.f); });
+
+        addButton("ToggleButton", "Toggle: spin", 176.f, Lu::Component::UIButtonMode::Toggle,
+            [setStatus](flecs::entity e) {
+                const auto& b=e.get<Lu::Component::UIButton>();
+                setStatus(b.selected ? "Selected: mint halo, rotation on" : "Unselected: rotation off");
+                style(e,b.selected ? glm::vec4{0.12f,0.42f,0.28f,1.f} : glm::vec4{0.10f,0.16f,0.24f,1.f},
+                    b.selected ? -0.18f : 0.08f, {0.28f,1.f,0.62f,1.f}, b.selected ? 0.7f : 0.f, 0.f);
+            },
+            [](flecs::entity e) { style(e,{0.20f,0.28f,0.20f,1.f},0.18f,{0.55f,1.f,0.42f,1.f},0.38f,-1.f); },
+            [](flecs::entity e) {
+                const auto& b=e.get<Lu::Component::UIButton>();
+                if (b.pressed) style(e,{0.12f,0.42f,0.28f,1.f},-0.28f,{0.35f,1.f,0.55f,1.f},0.82f,3.f);
+                else if (b.selected) style(e,{0.12f,0.42f,0.28f,1.f},-0.18f,{0.28f,1.f,0.62f,1.f},0.7f,0.f);
+                else style(e,{0.20f,0.28f,0.20f,1.f},0.14f,{0.55f,1.f,0.42f,1.f},0.3f,-1.f);
+            },
+            [](flecs::entity e) {
+                const auto& b=e.get<Lu::Component::UIButton>();
+                if (b.pressed) style(e,{0.12f,0.42f,0.28f,1.f},-0.28f,{0.35f,1.f,0.55f,1.f},0.82f,3.f);
+                else style(e,b.selected ? glm::vec4{0.12f,0.42f,0.28f,1.f} : glm::vec4{0.10f,0.16f,0.24f,1.f},
+                    b.selected ? -0.18f : 0.08f,{0.28f,1.f,0.62f,1.f},b.selected ? 0.7f : 0.f,0.f);
+            },
+            [](flecs::entity e) {
+                const auto& b=e.get<Lu::Component::UIButton>();
+                style(e,b.selected ? glm::vec4{0.12f,0.42f,0.28f,1.f} : glm::vec4{0.10f,0.16f,0.24f,1.f},
+                    b.selected ? -0.18f : 0.08f,{0.28f,1.f,0.62f,1.f},b.selected ? 0.7f : 0.f,0.f);
+            });
+
+        auto radioUpdate = [&world](flecs::entity) {
+            world.each([](flecs::entity e, const Lu::Component::UIButton& b) {
+                if (b.mode != Lu::Component::UIButtonMode::Radio) return;
+                if (b.pressed) style(e,{0.52f,0.30f,0.74f,1.f},-0.28f,{0.88f,0.62f,1.f,1.f},0.82f,3.f);
+                else style(e,b.selected ? glm::vec4{0.38f,0.24f,0.58f,1.f} : glm::vec4{0.10f,0.16f,0.24f,1.f},
+                    b.selected ? -0.15f : 0.08f,{0.76f,0.46f,1.f,1.f},b.selected ? 0.62f : 0.f,0.f);
+            });
+        };
+        auto radioHoverEnter = [](flecs::entity e) {
+            const auto& b=e.get<Lu::Component::UIButton>();
+            style(e,b.selected ? glm::vec4{0.38f,0.24f,0.58f,1.f} : glm::vec4{0.27f,0.20f,0.38f,1.f},
+                b.selected ? -0.15f : 0.18f,{0.80f,0.58f,1.f,1.f},b.selected ? 0.7f : 0.42f,b.pressed ? 3.f : -1.f);
+        };
+        auto radioHover = [](flecs::entity e) {
+            const auto& b=e.get<Lu::Component::UIButton>();
+            if (b.pressed) style(e,{0.52f,0.30f,0.74f,1.f},-0.28f,{0.88f,0.62f,1.f,1.f},0.82f,3.f);
+            else style(e,b.selected ? glm::vec4{0.38f,0.24f,0.58f,1.f} : glm::vec4{0.27f,0.20f,0.38f,1.f},
+                b.selected ? -0.15f : 0.14f,{0.80f,0.58f,1.f,1.f},b.selected ? 0.62f : 0.36f,0.f);
+        };
+        auto radioReset = [](flecs::entity e) {
+            const auto& b=e.get<Lu::Component::UIButton>();
+            if (b.pressed) style(e,{0.52f,0.30f,0.74f,1.f},-0.28f,{0.88f,0.62f,1.f,1.f},0.82f,3.f);
+            else style(e,b.selected ? glm::vec4{0.38f,0.24f,0.58f,1.f} : glm::vec4{0.10f,0.16f,0.24f,1.f},
+                b.selected ? -0.15f : 0.08f,{0.76f,0.46f,1.f,1.f},b.selected ? 0.62f : 0.f,0.f);
+        };
+        addButton("RadioOne", "Radio option A", 248.f, Lu::Component::UIButtonMode::Radio,
+            [radioUpdate,setStatus](flecs::entity e) { radioUpdate(e); setStatus("Selected: violet radio A"); },
+            radioHoverEnter,radioHover,radioReset,radioReset,true,1);
+        addButton("RadioTwo", "Radio option B", 320.f, Lu::Component::UIButtonMode::Radio,
+            [radioUpdate,setStatus](flecs::entity e) { radioUpdate(e); setStatus("Selected: violet radio B"); },
+            radioHoverEnter,radioHover,radioReset,radioReset,false,1);
+        radioUpdate(world.lookup("RadioOne"));
+
+        addButton("HoldButton", "Hold to press", 392.f, Lu::Component::UIButtonMode::Hold,
+            [setStatus](flecs::entity e) { setStatus("Held: amber bevel stays down"); style(e,{0.68f,0.34f,0.08f,1.f},-0.28f,{1.f,0.48f,0.08f,1.f},0.8f,4.f); },
+            [](flecs::entity e) { style(e,{0.34f,0.23f,0.12f,1.f},0.18f,{1.f,0.63f,0.18f,1.f},0.4f,-1.f); },
+            [](flecs::entity e) {
+                if (e.get<Lu::Component::UIButton>().pressed)
+                    style(e,{0.68f,0.34f,0.08f,1.f},-0.28f,{1.f,0.48f,0.08f,1.f},0.8f,4.f);
+                else style(e,{0.34f,0.23f,0.12f,1.f},0.14f,{1.f,0.63f,0.18f,1.f},0.35f,-1.f);
+            },
+            [](flecs::entity e) {
+                if (e.get<Lu::Component::UIButton>().pressed)
+                    style(e,{0.68f,0.34f,0.08f,1.f},-0.28f,{1.f,0.48f,0.08f,1.f},0.8f,4.f);
+                else style(e,{0.10f,0.16f,0.24f,1.f},0.08f,{1.f,0.63f,0.18f,1.f},0.f,0.f);
+            },
+            [](flecs::entity e) { style(e,{0.10f,0.16f,0.24f,1.f},0.08f,{1.f,0.63f,0.18f,1.f},0.f,0.f); });
+
+        world.system<Lu::Component::UIButton>("Rotate while toggle selected")
+            .each([rotating](const Lu::Component::UIButton& button) {
+                if (button.mode != Lu::Component::UIButtonMode::Toggle) return;
+                auto& transform = rotating.get_mut<Lu::Component::Transform2D>();
+                transform.setAngle(transform.getAngle() + (button.selected ? 0.025f : 0.f));
+                rotating.modified<Lu::Component::Transform2D>();
+            });
+    }
+};
+}
+
+int main() {
+    Lu::App("LuEngine Modular Buttons", false, 960, 640)
+        .registerShape2D<Lu::Shape2D::Rectangle>("Mesh2D::Button", glm::vec2(1.f,1.f))
+        .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
+            .name="Mesh2DPipe::SDF", .capacity=256,
+            .vertexShader="shader/mesh2d_ui.vert.spv", .fragmentShader="shader/mesh2d_ui.frag.spv",
+            .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL, .blendEnable=false, .alphaToCoverageEnable=true
+        })
+        .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
+            .name="Mesh2DPipe::SDFSoft", .capacity=256,
+            .vertexShader="shader/mesh2d_ui.vert.spv", .fragmentShader="shader/mesh2d_ui.frag.spv",
+            .cullMode=VK_CULL_MODE_NONE,
+            .depthWriteEnable=false, .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL,
+            .blendEnable=true
+        })
+        .registerFont("Font::Main", Demo::findFont(), 48)
+        .registerFontPipe(Lu::GraphicsPipelineConfig{
+            .name="FontPipe::Basic", .capacity=1024, .vertexShader="shader/font_basic.vert.spv",
+            .fragmentShader="shader/font_basic.frag.spv", .cullMode=VK_CULL_MODE_NONE,
+            .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL
+        })
+        .importModule<Lu::Module::UIButton>()
+        .importModule<Demo::ButtonDemo>()
+        .run();
+}
