@@ -1,6 +1,7 @@
 #include "App.hpp"
 #include "Shape2D.hpp"
 #include "module/ButtonModule.hpp"
+#include "module/ScrollListModule.hpp"
 #include "component/Transform2D.hpp"
 #include "component/Transform2DGpu.hpp"
 #include "component/Mesh2D.hpp"
@@ -232,6 +233,66 @@ struct ButtonDemo {
             });
     }
 };
+// A UIScrollList whose elements are UIButtons. The list does not know what its elements are: for every index it
+// creates a slot entity and calls createItem, which puts a UIButton on the slot. Everything below the list is clipped
+// to the list rectangle (Clip2D), so the pipelines have to support clipping (mesh2d_ui.* and font_clip.*).
+struct ScrollListDemo {
+    explicit ScrollListDemo(flecs::world& world) {
+        const auto mesh = world.lookup("Mesh2D::Button");
+        const auto sdfClip = world.lookup("Mesh2DPipe::SDFClip");
+        const auto font = world.lookup("Font::Main");
+        const auto clipFont = world.lookup("FontPipe::Clip");
+        const auto textPipe = world.lookup("FontPipe::Basic");
+        auto status = world.lookup("StatusText");
+
+        auto setStatus = [status, font, textPipe](const std::string& message) {
+            status.set<Lu::Component::Text2D>({.text=message, .font=font, .pipeline=textPipe,
+                .color={0.92f,0.88f,0.72f,1.f}, .size=22.f});
+        };
+
+        auto hintTransform = world.entity("ScrollHintTransform")
+            .set<Lu::Component::Transform2D>({.position={310.f,532.f}, .positionZ=3})
+            .add<Lu::Component::Transform2DGpu>();
+        world.entity("ScrollHint").set(flecs::Parent{hintTransform})
+            .set(Lu::Component::Text2D{.text="Mouse wheel or drag the scrollbar", .font=font,
+                .pipeline=textPipe, .color={0.62f,0.76f,0.86f,1.f}, .size=17.f});
+
+        constexpr uint32_t itemCount = 30;
+        world.entity("ScrollList")
+            .set<Lu::Component::Transform2D>({.position={310.f,140.f}, .positionZ=10})
+            .add<Lu::Component::Transform2DGpu>()
+            .set(Lu::Component::UIScrollList{
+                .size={236.f,380.f}, .itemCount=itemCount, .itemHeight=44.f, .spacing=8.f, .padding=8.f,
+                .mesh=mesh, .meshPipeline=sdfClip,
+                .backgroundColor={0.05f,0.08f,0.12f,1.f}, .backgroundParams={12.f,0.f,0.f,0.f},
+                .scrollbarWidth=8.f,
+                .trackColor={1.f,1.f,1.f,0.08f}, .trackParams={4.f,0.f,0.f,0.f},
+                .thumbParams={4.f,0.f,0.f,0.f},
+                // Any UI component can be the element: here every element is a UIButton.
+                .createItem=[=](flecs::entity slot, uint32_t index, glm::vec2 itemSize) {
+                    const glm::vec4 idle{0.10f,0.16f,0.24f,1.f};
+                    const glm::vec4 hover{0.16f,0.28f,0.38f,1.f};
+                    const glm::vec4 down{0.12f,0.62f,0.78f,1.f};
+                    const std::string name = "List button " + std::to_string(index + 1);
+                    slot.set(Lu::Component::UIButton{
+                        .mesh=mesh, .meshPipeline=sdfClip,
+                        .font=font, .fontPipeline=clipFont,
+                        .text=name, .color=idle, .textColor={0.91f,0.94f,0.98f,1.f},
+                        .fontSize=18.f, .meshParams={10.f,2.f,0.f,0.08f},
+                        .textTransform={.position={itemSize.x * 0.5f, 12.f}, .positionZ=2},
+                        .size=itemSize,
+                        .onClicked=[=](flecs::entity e) {
+                            setStatus("Clicked: " + name);
+                            style(e, down, -0.22f, {}, 0.f, 3.f);
+                        },
+                        .onHoverEnter=[=](flecs::entity e) { style(e, hover, 0.18f, {}, 0.f, -1.f); },
+                        .onHoverExit=[=](flecs::entity e) { style(e, idle, 0.08f, {}, 0.f, 0.f); },
+                        .onRelease=[=](flecs::entity e) { style(e, hover, 0.14f, {}, 0.f, -1.f); }
+                    });
+                }
+            });
+    }
+};
 }
 
 int main() {
@@ -249,13 +310,26 @@ int main() {
             .depthWriteEnable=false, .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL,
             .blendEnable=true
         })
+        // Clipping pipelines used by the scroll list elements (Clip2D is inherited from the list).
+        .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
+            .name="Mesh2DPipe::SDFClip", .capacity=1024,
+            .vertexShader="shader/mesh2d_ui.vert.spv", .fragmentShader="shader/mesh2d_ui.frag.spv",
+            .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL, .blendEnable=false, .alphaToCoverageEnable=true
+        })
         .registerFont("Font::Main", Demo::findFont(), 48)
         .registerFontPipe(Lu::GraphicsPipelineConfig{
             .name="FontPipe::Basic", .capacity=1024, .vertexShader="shader/font_basic.vert.spv",
             .fragmentShader="shader/font_basic.frag.spv", .cullMode=VK_CULL_MODE_NONE,
             .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL
         })
+        .registerFontPipe(Lu::GraphicsPipelineConfig{
+            .name="FontPipe::Clip", .capacity=1024, .vertexShader="shader/font_clip.vert.spv",
+            .fragmentShader="shader/font_clip.frag.spv", .cullMode=VK_CULL_MODE_NONE,
+            .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL
+        })
         .importModule<Lu::Module::UIButton>()
+        .importModule<Lu::Module::UIScrollList>()
         .importModule<Demo::ButtonDemo>()
+        .importModule<Demo::ScrollListDemo>()
         .run();
 }

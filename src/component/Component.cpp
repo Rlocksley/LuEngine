@@ -2,6 +2,7 @@
 #include "UIDisplay.hpp"
 #include "UIWindow.hpp"
 #include "UIButton.hpp"
+#include "UIScrollList.hpp"
 #include "Toggle.hpp"
 #include "Slider.hpp"
 #include "TextInput.hpp"

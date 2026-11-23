@@ -5,6 +5,7 @@ project(LCA)
 add_library(lu_module STATIC
 Module.cpp
 ButtonModule.hpp
+ScrollListModule.hpp
 )
 
 target_include_directories(lu_module PUBLIC ../core ../component)

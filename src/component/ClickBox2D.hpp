@@ -2,6 +2,7 @@
 
 #include "Global.hpp"
 #include "component/Transform2D.hpp"
+#include "component/Clip2D.hpp"
 #include "component/InputState.hpp"
 
 namespace Lu {
@@ -32,11 +33,15 @@ struct ClickBox2D {
 
         // Like Mesh2D and Text2D, a ClickBox2D is a leaf whose transform is
         // inherited from its nearest Transform2D ancestor. Each box evaluates itself.
+        // If the box has a Clip2D ancestor (e.g. inside a UIScrollList) the part of the box that is
+        // clipped away is not clickable / hoverable: the cursor has to be inside the Clip2D too.
         world.system<const Component::WorldTransform2D, Component::ClickBox2D,
-                     const Component::InputState>("Update ClickBox2D")
+                     const Component::InputState, const Component::Clip2D*>("Update ClickBox2D")
             .term_at(0).up()
+            .term_at(3).up().optional()
             .each([](flecs::entity e, const Component::WorldTransform2D& transform,
-                     Component::ClickBox2D& box, const Component::InputState& input) {
+                     Component::ClickBox2D& box, const Component::InputState& input,
+                     const Component::Clip2D* clip) {
                 e.remove<Component::ClickBox2DHoveredEnter>();
                 e.remove<Component::ClickBox2DHoveredExit>();
                 e.remove<Component::ClickBox2DClicked>();
@@ -45,7 +50,10 @@ struct ClickBox2D {
                 const glm::vec2 mouse = input.getCursorPosition();
                 const glm::vec2 local = glm::vec2(glm::inverse(transform.getMatrix()) *
                     glm::vec4(mouse, 0.f, 1.f));
-                const bool hovered = box.enabled && box.size.x > 0.f && box.size.y > 0.f &&
+                const bool insideClip = clip == nullptr ||
+                    (mouse.x >= clip->position.x && mouse.y >= clip->position.y &&
+                     mouse.x <= clip->position.x + clip->size.x && mouse.y <= clip->position.y + clip->size.y);
+                const bool hovered = insideClip && box.enabled && box.size.x > 0.f && box.size.y > 0.f &&
                     local.x >= box.position.x && local.y >= box.position.y &&
                     local.x <= box.position.x + box.size.x &&
                     local.y <= box.position.y + box.size.y;
