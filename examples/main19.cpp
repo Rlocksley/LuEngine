@@ -8,8 +8,6 @@
 #include <filesystem>
 
 namespace Demo {
-struct GlowLayer {};
-
 static std::string findFont() {
     for (const auto& path : {"C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/segoeui.ttf"})
         if (std::filesystem::exists(path)) return path;
@@ -21,11 +19,12 @@ static std::string findFont() {
 static void style(flecs::entity owner, glm::vec4 fill, float gradient,
                   glm::vec4 glow, float glowAlpha, float offsetY) {
     owner.children([&](flecs::entity part) {
-        if (part.has<GlowLayer>()) {
+        const auto* layerTransform = part.try_get<Lu::Component::Transform2D>();
+        if (layerTransform && layerTransform->positionZ == 0) {
             if (auto* transform = part.try_get<Lu::Component::Transform2D>()) {
                 auto updated = *transform;
                 if (updated.position.y != -12.f) {
-                    updated.position.y = -12.f;
+                    updated.position = {-12.f, -12.f};
                     part.set<Lu::Component::Transform2D>(updated);
                 }
             }
@@ -43,7 +42,7 @@ static void style(flecs::entity owner, glm::vec4 fill, float gradient,
                     }
                 }
             });
-        } else {
+        } else if (layerTransform && layerTransform->positionZ == 1) {
             if (auto* transform = part.try_get<Lu::Component::Transform2D>()) {
                 auto updated = *transform;
                 if (updated.position.y != offsetY) {
@@ -67,25 +66,11 @@ static void style(flecs::entity owner, glm::vec4 fill, float gradient,
     });
 }
 
-static void addGlow(flecs::world& world, flecs::entity owner,
-                    flecs::entity mesh, flecs::entity softPipeline,
-                    glm::vec2 size) {
-    auto layer = world.entity().set(flecs::Parent{owner})
-        .add<GlowLayer>()
-        .set<Lu::Component::Transform2D>({.position={-12.f,-12.f}, .positionZ=0,
-            .scale=size + glm::vec2(24.f)})
-        .add<Lu::Component::Transform2DGpu>();
-    world.entity().set(flecs::Parent{layer}).set(Lu::Component::Mesh2D{
-        .mesh=mesh, .pipeline=softPipeline, .color={0.4f,0.7f,1.f,0.f}, .params={18.f,12.f,9.f,0.f}
-    });
-}
-
 struct ButtonDemo {
     explicit ButtonDemo(flecs::world& world) {
-        world.component<GlowLayer>();
         const auto mesh = world.lookup("Mesh2D::Button");
-        const auto sdf = world.lookup("Mesh2DPipe::SDF");
-        const auto softSdf = world.lookup("Mesh2DPipe::SDFSoft");
+        const auto sdf = world.lookup("Mesh2DPipe::SDFButton");
+        const auto softSdf = world.lookup("Mesh2DPipe::SDFBackground");
         const auto font = world.lookup("Font::Main");
         const auto textPipe = world.lookup("FontPipe::Basic");
 
@@ -129,16 +114,18 @@ struct ButtonDemo {
                 .set<Lu::Component::Transform2D>({.position={56.f,y}, .positionZ=10})
                 .add<Lu::Component::Transform2DGpu>()
                 .set(Lu::Component::UIButton{
-                    .mesh=mesh, .meshPipeline=sdf, .font=font, .fontPipeline=textPipe,
+                    .mesh=mesh, .meshPipeline=sdf, .mesh2=mesh, .meshPipeline2=softSdf,
+                    
+                    .font=font, .fontPipeline=textPipe,
                     .text=label, .color={0.10f,0.16f,0.24f,1.f}, .textColor={0.91f,0.94f,0.98f,1.f},
                     .fontSize=19.f, .meshParams={10.f,2.f,0.f,0.08f},
+                    .mesh2Param={18.f,12.f,9.f,0.f},.mesh2Color={0.4f,0.7f,1.f,0.f},
                     .textTransform={.position={114.f,16.f}, .positionZ=2},
                     .selected=selected, .mode=mode, .radioGroup=group, .size=size,
                     .onClicked=std::move(onClicked), .onHover=std::move(onHover),
                     .onHoverEnter=std::move(onHoverEnter), .onHoverExit=std::move(onHoverExit),
                     .onRelease=std::move(onRelease)
                 });
-            addGlow(world, entity, mesh, softSdf, size);
             return entity;
         };
 
@@ -251,13 +238,13 @@ int main() {
     Lu::App("LuEngine Modular Buttons", false, 960, 640)
         .registerShape2D<Lu::Shape2D::Rectangle>("Mesh2D::Button", glm::vec2(1.f,1.f))
         .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
-            .name="Mesh2DPipe::SDF", .capacity=256,
-            .vertexShader="shader/mesh2d_ui.vert.spv", .fragmentShader="shader/mesh2d_ui.frag.spv",
+            .name="Mesh2DPipe::SDFButton", .capacity=256,
+            .vertexShader="shader/mesh2d_ui.vert.spv", .fragmentShader="shader/mesh2d_button.frag.spv",
             .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL, .blendEnable=false, .alphaToCoverageEnable=true
         })
         .registerMesh2DPipe(Lu::GraphicsPipelineConfig{
-            .name="Mesh2DPipe::SDFSoft", .capacity=256,
-            .vertexShader="shader/mesh2d_ui.vert.spv", .fragmentShader="shader/mesh2d_ui.frag.spv",
+            .name="Mesh2DPipe::SDFBackground", .capacity=256,
+            .vertexShader="shader/mesh2d_ui.vert.spv", .fragmentShader="shader/mesh2d_background.frag.spv",
             .cullMode=VK_CULL_MODE_NONE,
             .depthWriteEnable=false, .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL,
             .blendEnable=true

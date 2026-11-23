@@ -22,6 +22,18 @@ struct UIButton {
             .each([](flecs::entity e, const Component::UIButton& button, const Component::Transform2D&) {
                 e.children([](flecs::entity child) { child.destruct(); });
 
+                // Optional back layer (for a glow, shadow, or other SDF effect).
+                // Its larger transform leaves room for the SDF softness around the button.
+                if (button.mesh2.id() != 0 && button.meshPipeline2.id() != 0) {
+                    auto background = e.world().entity().set(flecs::Parent{e})
+                        .set<Component::Transform2D>({.positionZ=0, .scale=button.size + glm::vec2(24.f)})
+                        .add<Component::Transform2DGpu>();
+                    background.world().entity().set(flecs::Parent{background}).set(Component::Mesh2D{
+                        .mesh=button.mesh2, .pipeline=button.meshPipeline2,
+                        .color=button.mesh2Color, .params=button.mesh2Param
+                    });
+                }
+
                 auto visual = e.world().entity().set(flecs::Parent{e})
                     .set<Component::Transform2D>({.positionZ=1, .scale=button.size})
                     .add<Component::Transform2DGpu>();

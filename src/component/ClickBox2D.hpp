@@ -32,10 +32,10 @@ struct ClickBox2D {
 
         // Like Mesh2D and Text2D, a ClickBox2D is a leaf whose transform is
         // inherited from its nearest Transform2D ancestor. Each box evaluates itself.
-        world.system<const Component::Transform2D, Component::ClickBox2D,
+        world.system<const Component::WorldTransform2D, Component::ClickBox2D,
                      const Component::InputState>("Update ClickBox2D")
             .term_at(0).up()
-            .each([](flecs::entity e, const Component::Transform2D& transform,
+            .each([](flecs::entity e, const Component::WorldTransform2D& transform,
                      Component::ClickBox2D& box, const Component::InputState& input) {
                 e.remove<Component::ClickBox2DHoveredEnter>();
                 e.remove<Component::ClickBox2DHoveredExit>();

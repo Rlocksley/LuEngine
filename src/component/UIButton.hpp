@@ -11,6 +11,8 @@ namespace Lu {
         struct UIButton {
             flecs::entity mesh;
             flecs::entity meshPipeline;
+            flecs::entity mesh2;
+            flecs::entity meshPipeline2;
             flecs::entity font;
             flecs::entity fontPipeline;
             flecs::entity texture;
@@ -20,6 +22,8 @@ namespace Lu {
             glm::vec4 textColor{1.f, 1.f, 1.f, 1.f}; 
             float fontSize{-1.0f};      
             glm::vec4 meshParams{0.f, 0.f, 0.f, 0.f};
+            glm::vec4 mesh2Param{0.f, 0.f, 0.f, 0.f};
+            glm::vec4 mesh2Color{0.f, 0.f, 0.f, 0.f};
             float lineSpacing{0.f}; 
             float maxWidth{0}; // 0 = no word wrapping
             Lu::TextAlign align{Lu::TextAlign::Center};

@@ -8,21 +8,6 @@
 namespace Lu {
     namespace Component {
 
-        // 2D transform in pixels (origin = top-left of the window, x right, y down - before the Camera2D).
-        // Put it on the PARENT entity of the entities that have a Component::Text:
-        //
-        //      auto label = world.entity("Label").set<Component::Transform2D>({.position = {20.f, 20.f}});
-        //      world.entity("LabelText").child_of(label).set<Component::Text>({...});
-        //
-        // It is only mirrored into the Transform2DPackage of the renderer if the entity also has a
-        // Component::Transform2DGpu (see Transform2DGpu.hpp), exactly like Transform / TransformGpu:
-        //
-        //      world.entity("Label").set<Component::Transform2D>({...}).add<Component::Transform2DGpu>();
-        //
-        // Add Component::Static if it never changes after it was set, to save the per-frame update.
-        //
-        // Transform2D is LOCAL to the parent entity if that (or an ancestor) has a Transform2D, and WORLD if there is
-        // none. The WorldTransform2D (parent world * local) is added / updated / removed automatically.
         struct Transform2D {
             glm::vec2 position{0.0f, 0.0f};
             uint32_t positionZ{0};                       // layer: a higher value is drawn in front (clamped to 0..65535)
