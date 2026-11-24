@@ -3,6 +3,8 @@
 #include "component/Transform2D.hpp"
 #include "component/Clip2D.hpp"
 #include "UICore.hpp"
+#include <utility>
+#include <vector>
 
 namespace Lu {
     namespace Component {
@@ -26,6 +28,11 @@ namespace Lu {
         //      .createItem = [&](flecs::entity slot, uint32_t i, glm::vec2 itemSize) {
         //          slot.set(Component::UIButton{ ..., .size = itemSize });
         //      }
+        // For a list where each element has its own description, leave createItem empty and call addItem:
+        //      Component::UIScrollList list{ .size = {240.f, 320.f}, .itemHeight = 48.f };
+        //      list.addItem([](flecs::entity slot, uint32_t, glm::vec2 size) { slot.set(MyHeader{...}); });
+        //      list.addItem([](flecs::entity slot, uint32_t, glm::vec2 size) { slot.set(MyButton{..., .size=size}); });
+        //      world.entity("list").set(list);
         //
         // Because the slots are below a Clip2D entity, every Mesh2D / Text2D of the elements inherits the clip rectangle. Use
         // pipelines that support clipping (shader/mesh2d_clip.*, shader/mesh2d_ui.*, shader/font_clip.*) for the elements.
@@ -40,6 +47,7 @@ namespace Lu {
 
             float scroll{0.f};              // pixels; read / write it any time (it is clamped every frame)
             float wheelSpeed{48.f};         // pixels per mouse wheel notch
+            float scrollSmoothTime{0.18f};  // seconds to settle after wheel/code scrolling; 0 disables smoothing
 
             // Optional visuals. All parts use `mesh` (a unit square: Mesh2D::...) and `meshPipeline`.
             flecs::entity mesh;
@@ -57,14 +65,26 @@ namespace Lu {
             glm::vec4 trackParams{0.f, 0.f, 0.f, 0.f};
             glm::vec4 thumbParams{0.f, 0.f, 0.f, 0.f};
 
-            // Called for every element while the list is (re)built.
+            // Called for every element while the list is (re)built. Use this for a uniform/index-driven list.
             std::function<void(flecs::entity slot, uint32_t index, glm::vec2 itemSize)> createItem{};
+            // Optional explicit elements. When non-empty, these callbacks are used instead of createItem and determine
+            // the list's element count. Each callback can build a different kind of element in its slot.
+            std::vector<std::function<void(flecs::entity slot, uint32_t index, glm::vec2 itemSize)>> items{};
+
+            UIScrollList& addItem(std::function<void(flecs::entity slot, uint32_t index, glm::vec2 itemSize)> describe) {
+                items.push_back(std::move(describe));
+                itemCount = static_cast<uint32_t>(items.size());
+                return *this;
+            }
+
+            uint32_t elementCount() const { return items.empty() ? itemCount : static_cast<uint32_t>(items.size()); }
             // Called when `scroll` changed (wheel, thumb dragging or code).
             std::function<void(flecs::entity list, float scroll)> onScroll{};
 
             float contentHeight() const {
-                const float n = static_cast<float>(itemCount);
-                return 2.f * padding + (itemCount ? n * itemHeight + (n - 1.f) * spacing : 0.f);
+                const uint32_t count = elementCount();
+                const float n = static_cast<float>(count);
+                return 2.f * padding + (count ? n * itemHeight + (n - 1.f) * spacing : 0.f);
             }
             float maxScroll() const { return std::max(0.f, contentHeight() - size.y); }
         };

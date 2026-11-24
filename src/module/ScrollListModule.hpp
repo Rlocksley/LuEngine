@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 
 #include "UIScrollList.hpp"
 #include "ClickBox2D.hpp"
@@ -62,14 +63,16 @@ struct UIScrollList {
                     .set<Component::Transform2D>({.position={list.padding, list.padding - scroll}, .positionZ=2})
                     .add<Component::Transform2DGpu>();
 
-                if (list.createItem) {
-                    for (uint32_t i = 0; i < list.itemCount; ++i) {
+                if (!list.items.empty() || list.createItem) {
+                    const uint32_t itemCount = list.elementCount();
+                    for (uint32_t i = 0; i < itemCount; ++i) {
                         auto slot = w.entity().set(flecs::Parent{state.content})
                             .set<Component::Transform2D>({
                                 .position={0.f, static_cast<float>(i) * (list.itemHeight + list.spacing)},
                                 .positionZ=1})
                             .add<Component::Transform2DGpu>();
-                        list.createItem(slot, i, itemSize);
+                        if (!list.items.empty()) list.items[i](slot, i, itemSize);
+                        else list.createItem(slot, i, itemSize);
                     }
                 }
 
@@ -102,12 +105,13 @@ struct UIScrollList {
                 e.set<Component::UIScrollListState>(state);
             });
 
-        // Wheel, thumb dragging and clamping change `scroll`; every frame the result is applied to the content,
-        // the thumb and the Clip2D (the list may have been moved). Runs after "Update ClickBox2D".
+        // Wheel input updates the target scroll; the content eases toward it. Thumb dragging stays direct.
+        // Runs after "Update ClickBox2D".
         world.system<const Component::WorldTransform2D, Component::UIScrollList,
                      Component::UIScrollListState, const Component::InputState>("UIScrollList update")
-            .each([](flecs::entity e, const Component::WorldTransform2D& world2D, Component::UIScrollList& list,
+            .each([](flecs::iter& it, size_t row, const Component::WorldTransform2D& world2D, Component::UIScrollList& list,
                      Component::UIScrollListState& state, const Component::InputState& input) {
+                const flecs::entity e = it.entity(row);
                 const float maxScroll = list.maxScroll();
                 float scroll = list.scroll;
 
@@ -133,19 +137,28 @@ struct UIScrollList {
                 scroll = std::clamp(scroll, 0.f, maxScroll);
                 list.scroll = scroll;
 
-                if (scroll != state.appliedScroll) {
-                    state.appliedScroll = scroll;
+                // Exponential easing is frame-rate independent and converges smoothly without overshooting.
+                float visualScroll = scroll;
+                if (!state.dragging && list.scrollSmoothTime > 0.f) {
+                    const float dt = std::clamp(it.delta_time(), 0.f, 0.1f);
+                    const float alpha = 1.f - std::exp(-dt / list.scrollSmoothTime);
+                    visualScroll = state.appliedScroll + (scroll - state.appliedScroll) * alpha;
+                }
+                visualScroll = std::clamp(visualScroll, 0.f, maxScroll);
+
+                if (visualScroll != state.appliedScroll) {
+                    state.appliedScroll = visualScroll;
                     if (state.content.is_alive()) {
                         auto t = state.content.get<Component::Transform2D>();
-                        t.position.y = list.padding - scroll;
+                        t.position.y = list.padding - visualScroll;
                         state.content.set<Component::Transform2D>(t);
                     }
                     if (state.thumb.id() && state.thumb.is_alive()) {
                         auto t = state.thumb.get<Component::Transform2D>();
-                        t.position.y = maxScroll > 0.f ? (list.size.y - state.thumbHeight) * scroll / maxScroll : 0.f;
+                        t.position.y = maxScroll > 0.f ? (list.size.y - state.thumbHeight) * visualScroll / maxScroll : 0.f;
                         state.thumb.set<Component::Transform2D>(t);
                     }
-                    if (list.onScroll) list.onScroll(e, scroll);
+                    if (list.onScroll) list.onScroll(e, visualScroll);
                 }
 
                 // Thumb color: idle / hovered / dragged.

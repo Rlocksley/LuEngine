@@ -243,7 +243,7 @@ struct ScrollListDemo {
         const auto font = world.lookup("Font::Main");
         const auto clipFont = world.lookup("FontPipe::Clip");
         const auto textPipe = world.lookup("FontPipe::Basic");
-        auto status = world.lookup("StatusText");
+        auto status = world.lookup("Demo::ButtonDemo::StatusText");
 
         auto setStatus = [status, font, textPipe](const std::string& message) {
             status.set<Lu::Component::Text2D>({.text=message, .font=font, .pipeline=textPipe,
