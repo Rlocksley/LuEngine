@@ -3,6 +3,7 @@
 #include "component/Transform2D.hpp"
 #include "component/Clip2D.hpp"
 #include "UICore.hpp"
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -28,10 +29,10 @@ namespace Lu {
         //      .createItem = [&](flecs::entity slot, uint32_t i, glm::vec2 itemSize) {
         //          slot.set(Component::UIButton{ ..., .size = itemSize });
         //      }
-        // For a list where each element has its own description, leave createItem empty and call addItem:
+        // For a list where each element has its own description, leave createItem empty and call addItem(index, callback):
         //      Component::UIScrollList list{ .size = {240.f, 320.f}, .itemHeight = 48.f };
-        //      list.addItem([](flecs::entity slot, uint32_t, glm::vec2 size) { slot.set(MyHeader{...}); });
-        //      list.addItem([](flecs::entity slot, uint32_t, glm::vec2 size) { slot.set(MyButton{..., .size=size}); });
+        //      list.addItem(0, [](flecs::entity slot, uint32_t, glm::vec2 size) { slot.set(MyHeader{...}); });
+        //      list.addItem(1, [](flecs::entity slot, uint32_t, glm::vec2 size) { slot.set(MyButton{..., .size=size}); });
         //      world.entity("list").set(list);
         //
         // Because the slots are below a Clip2D entity, every Mesh2D / Text2D of the elements inherits the clip rectangle. Use
@@ -71,8 +72,25 @@ namespace Lu {
             // the list's element count. Each callback can build a different kind of element in its slot.
             std::vector<std::function<void(flecs::entity slot, uint32_t index, glm::vec2 itemSize)>> items{};
 
-            UIScrollList& addItem(std::function<void(flecs::entity slot, uint32_t index, glm::vec2 itemSize)> describe) {
-                items.push_back(std::move(describe));
+            UIScrollList& addItem(uint32_t index,
+                                  std::function<void(flecs::entity slot, uint32_t index, glm::vec2 itemSize)> describe) {
+                // Preserve existing factory-created rows as empty overrides when switching to indexed items.
+                if (items.empty() && itemCount != 0) items.resize(itemCount);
+                // Indices past the end append. The module rebuilds slots in order, repositioning every later item.
+                const auto insertAt = items.begin() + std::min<size_t>(index, items.size());
+                items.insert(insertAt, std::move(describe));
+                itemCount = static_cast<uint32_t>(items.size());
+                return *this;
+            }
+
+            UIScrollList& removeItem(uint32_t index) {
+                const uint32_t count = elementCount();
+                // Out-of-range indices are ignored. Rebuilt slots compact and reposition the later rows.
+                if (index >= count) return *this;
+
+                // Materialize factory rows so erasing one index doesn't discard the factory for every other row.
+                if (items.empty()) items.resize(count);
+                items.erase(items.begin() + index);
                 itemCount = static_cast<uint32_t>(items.size());
                 return *this;
             }

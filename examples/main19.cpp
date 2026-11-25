@@ -7,6 +7,9 @@
 #include "component/Mesh2D.hpp"
 #include "component/Text2D.hpp"
 #include <filesystem>
+#include <memory>
+#include <random>
+#include <vector>
 
 namespace Demo {
 static std::string findFont() {
@@ -258,7 +261,9 @@ struct ScrollListDemo {
                 .pipeline=textPipe, .color={0.62f,0.76f,0.86f,1.f}, .size=17.f});
 
         constexpr uint32_t itemCount = 30;
-        world.entity("ScrollList")
+        auto rowIds = std::make_shared<std::vector<uint32_t>>();
+        for (uint32_t i = 0; i < itemCount; ++i) rowIds->push_back(i + 1);
+        auto scrollListEntity = world.entity("ScrollList")
             .set<Lu::Component::Transform2D>({.position={310.f,140.f}, .positionZ=10})
             .add<Lu::Component::Transform2DGpu>()
             .set(Lu::Component::UIScrollList{
@@ -273,7 +278,7 @@ struct ScrollListDemo {
                     const glm::vec4 idle{0.10f,0.16f,0.24f,1.f};
                     const glm::vec4 hover{0.16f,0.28f,0.38f,1.f};
                     const glm::vec4 down{0.12f,0.62f,0.78f,1.f};
-                    const std::string name = "List button " + std::to_string(index + 1);
+                    const std::string name = "List button " + std::to_string((*rowIds)[index]);
                     slot.set(Lu::Component::UIButton{
                         .mesh=mesh, .meshPipeline=sdfClip,
                         .font=font, .fontPipeline=clipFont,
@@ -289,6 +294,88 @@ struct ScrollListDemo {
                         .onHoverExit=[=](flecs::entity e) { style(e, idle, 0.08f, {}, 0.f, 0.f); },
                         .onRelease=[=](flecs::entity e) { style(e, hover, 0.14f, {}, 0.f, -1.f); }
                     });
+                }
+            });
+
+        auto insertCount = std::make_shared<uint32_t>(0);
+        auto random = std::make_shared<std::mt19937>(std::random_device{}());
+        const glm::vec2 insertButtonSize{236.f, 44.f};
+        world.entity("InsertRandomListItem")
+            .set<Lu::Component::Transform2D>({.position={310.f,570.f}, .positionZ=10})
+            .add<Lu::Component::Transform2DGpu>()
+            .set(Lu::Component::UIButton{
+                .mesh=mesh, .meshPipeline=sdfClip,
+                .font=font, .fontPipeline=clipFont,
+                .text="Insert random item", .color={0.10f,0.16f,0.24f,1.f},
+                .textColor={0.91f,0.94f,0.98f,1.f}, .fontSize=17.f,
+                .meshParams={10.f,2.f,0.f,0.08f},
+                .textTransform={.position={insertButtonSize.x * 0.5f, 12.f}, .positionZ=2},
+                .size=insertButtonSize,
+                .onClicked=[scrollListEntity, insertCount, random, rowIds, setStatus, mesh, sdfClip, font, clipFont]
+                    (flecs::entity button) {
+                    auto list = scrollListEntity.get<Lu::Component::UIScrollList>();
+                    if (const auto* state = scrollListEntity.try_get<Lu::Component::UIScrollListState>())
+                        list.scroll = state->appliedScroll;
+
+                    const uint32_t insertionIndex = std::uniform_int_distribution<uint32_t>(0, list.elementCount())(*random);
+                    const uint32_t insertionNumber = ++*insertCount;
+                    const std::string label = std::to_string(insertionNumber) + "-th insert at " +
+                        std::to_string(insertionIndex);
+                    rowIds->insert(rowIds->begin() + insertionIndex, 0);
+                    list.addItem(insertionIndex, [=](flecs::entity slot, uint32_t, glm::vec2 itemSize) {
+                        const glm::vec4 idle{0.10f,0.16f,0.24f,1.f};
+                        const glm::vec4 hover{0.16f,0.28f,0.38f,1.f};
+                        const glm::vec4 down{0.12f,0.62f,0.78f,1.f};
+                        slot.set(Lu::Component::UIButton{
+                            .mesh=mesh, .meshPipeline=sdfClip,
+                            .font=font, .fontPipeline=clipFont,
+                            .text=label, .color=idle, .textColor={0.91f,0.94f,0.98f,1.f},
+                            .fontSize=18.f, .meshParams={10.f,2.f,0.f,0.08f},
+                            .textTransform={.position={itemSize.x * 0.5f, 12.f}, .positionZ=2},
+                            .size=itemSize,
+                            .onClicked=[setStatus, label](flecs::entity e) { setStatus("Clicked: " + label); },
+                            .onHoverEnter=[=](flecs::entity e) { style(e, hover, 0.18f, {}, 0.f, -1.f); },
+                            .onHoverExit=[=](flecs::entity e) { style(e, idle, 0.08f, {}, 0.f, 0.f); },
+                            .onRelease=[=](flecs::entity e) { style(e, hover, 0.14f, {}, 0.f, -1.f); }
+                        });
+                    });
+                    scrollListEntity.set<Lu::Component::UIScrollList>(list);
+                    setStatus("Inserted: " + label);
+                    style(button, {0.16f,0.28f,0.38f,1.f}, 0.14f, {}, 0.f, -1.f);
+                }
+            });
+
+        world.entity("RemoveRandomListItem")
+            .set<Lu::Component::Transform2D>({.position={560.f,570.f}, .positionZ=10})
+            .add<Lu::Component::Transform2DGpu>()
+            .set(Lu::Component::UIButton{
+                .mesh=mesh, .meshPipeline=sdfClip,
+                .font=font, .fontPipeline=clipFont,
+                .text="Remove random item", .color={0.10f,0.16f,0.24f,1.f},
+                .textColor={0.91f,0.94f,0.98f,1.f}, .fontSize=17.f,
+                .meshParams={10.f,2.f,0.f,0.08f},
+                .textTransform={.position={insertButtonSize.x * 0.5f, 12.f}, .positionZ=2},
+                .size=insertButtonSize,
+                .onClicked=[scrollListEntity, random, rowIds, setStatus](flecs::entity button) {
+                    auto list = scrollListEntity.get<Lu::Component::UIScrollList>();
+                    const uint32_t count = list.elementCount();
+                    if (count == 0) {
+                        setStatus("The scroll list is empty");
+                        return;
+                    }
+
+                    if (const auto* state = scrollListEntity.try_get<Lu::Component::UIScrollListState>())
+                        list.scroll = state->appliedScroll;
+                    const uint32_t removalIndex = std::uniform_int_distribution<uint32_t>(0, count - 1)(*random);
+                    const uint32_t removedRowId = (*rowIds)[removalIndex];
+
+                    rowIds->erase(rowIds->begin() + removalIndex);
+                    list.removeItem(removalIndex);
+                    scrollListEntity.set<Lu::Component::UIScrollList>(list);
+                    const std::string removedLabel = removedRowId == 0
+                        ? "inserted item" : "List button " + std::to_string(removedRowId);
+                    setStatus("Removed " + removedLabel + " at " + std::to_string(removalIndex));
+                    style(button, {0.16f,0.28f,0.38f,1.f}, 0.14f, {}, 0.f, -1.f);
                 }
             });
     }

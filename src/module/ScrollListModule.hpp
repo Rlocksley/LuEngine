@@ -25,6 +25,7 @@ struct UIScrollList {
         world.observer<const Component::UIScrollList, const Component::Transform2D>()
             .event(flecs::OnSet)
             .each([](flecs::entity e, const Component::UIScrollList& list, const Component::Transform2D& transform) {
+                // The observer owns the row entities: discard the old hierarchy and rebuild slots from the updated list.
                 e.children([](flecs::entity child) { child.destruct(); });
                 flecs::world w = e.world();
 
@@ -71,8 +72,8 @@ struct UIScrollList {
                                 .position={0.f, static_cast<float>(i) * (list.itemHeight + list.spacing)},
                                 .positionZ=1})
                             .add<Component::Transform2DGpu>();
-                        if (!list.items.empty()) list.items[i](slot, i, itemSize);
-                        else list.createItem(slot, i, itemSize);
+                        if (i < list.items.size() && list.items[i]) list.items[i](slot, i, itemSize);
+                        else if (list.createItem) list.createItem(slot, i, itemSize);
                     }
                 }
 
