@@ -6,6 +6,7 @@ add_library(lu_module STATIC
 Module.cpp
 ButtonModule.hpp
 ScrollListModule.hpp
+ScrollMatrixModule.hpp
 )
 
 target_include_directories(lu_module PUBLIC ../core ../component)

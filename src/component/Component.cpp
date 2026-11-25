@@ -3,6 +3,7 @@
 #include "UIWindow.hpp"
 #include "UIButton.hpp"
 #include "UIScrollList.hpp"
+#include "UIScrollMatrix.hpp"
 #include "Toggle.hpp"
 #include "Slider.hpp"
 #include "TextInput.hpp"

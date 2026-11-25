@@ -9,6 +9,7 @@ UIDisplay.hpp
 UIWindow.hpp
 UIButton.hpp
 UIScrollList.hpp
+UIScrollMatrix.hpp
 ClickBox2D.hpp
 Toggle.hpp
 Slider.hpp
