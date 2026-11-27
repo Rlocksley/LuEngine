@@ -7,8 +7,8 @@ You write your whole Game within flecs ECS.\
 If you add/set/remove LuEngine Core Components, Observer are triggered, which talk to the Renderer.
 
 **Shader API** \
-register graphics pipelines for meshes, multimeshes, skeletonmeshes and 2D text \
-plus compute pipelines for multimesh-instance transformation.
+register graphics pipelines for meshes (2D/3D), multimeshes (3D), skeletonmeshes (3D) and text (2D) 
+plus compute pipelines for multimesh-instance transformations.
 
 
 The renderer is Vulkan-based.
@@ -25,6 +25,7 @@ The renderer is Vulkan-based.
 7.] for your own project, create a directory in `examples` and\
 copy/adjust the `examples/CMakeLists.txt` and `.vscode/launch.json` , `.vscode/tasks.json`
 
+should work with every C++ compiler (maybe minimal adjustments)
 <details>
 <summary>1. Hello World</summary>
 
@@ -272,40 +273,6 @@ Lu::App("Character")
 ```
 </details>
 
-<details>
-<summary>UI: windows, sliders, tabs ... as entity hierarchies</summary>
-
-The UI module (`importModule<Lu::Module::UI>()`, see `examples/main_ui.cpp`) has **no factory functions**. A widget is an entity with a `Transform2D` (local to the parent widget, origin = top-left corner), a `Node` (size, layout hints) and a widget component. The module observes the widget component and creates the entities that draw it (`Transform2D` + `Mesh2D` / `Text` rectangles, knobs, texts) and the child widgets it consists of (close button of a `Window`, tabs of a `TabView`, options of a `Dropdown`, scroll bar of a `ScrollView`).
-
-```cpp
-using namespace Lu::UI;
-auto window = world.entity("Settings")
-    .set<Lu::Component::Transform2D>({.position = {100, 80}})
-    .set<Node>({.size = {360, 240}})
-    .set<Window>({.title = "Settings"});
-
-world.entity("Volume").child_of(window)
-    .set<Lu::Component::Transform2D>({.position = {20, 60}})   // relative to the window
-    .set<Node>({.size = {240, 24}})
-    .set<Slider>({.value = 0.7f, .onChange = [](flecs::entity, float v) { /* ... */ }});
-```
-
-| Widget components | |
-|---|---|
-| `Panel`, `Label`, `Image`, `ProgressBar` | display |
-| `Button`, `Toggle` (check box / radio group), `Slider`, `TextInput`, `Dropdown` | input |
-| `Window` (title bar, drag, close, raise on click), `TabView` + `TabPage`, `ScrollView` (+ `ScrollBar`) | containers |
-| `Layout` (horizontal / vertical / grid, auto size, grow) | on any node: places the child nodes |
-| `Style` | theme for the entity and everything below it |
-| `Interact`, `Draggable`, `Tooltip`, `Modal`, `Hidden` | add to any node |
-
-* Changing a widget component (`set`, or `get_mut` + `modified`) redraws it. The widgets that need several entities create them in an observer-triggered pass of the UI module (phase `UISync`), widgets inside widgets are created one frame later each.
-* Everything uses the `Transform2D` hierarchy: moving, hiding (`Hidden`) or destroying a widget moves / hides / destroys everything below it. Layers (`positionZ`) are derived from `Node::layer` (a child sits above its parent), the top-most node under the cursor gets the mouse (`Lu::UI::Pointer::of(world).overUI` tells you whether the mouse is over the UI).
-* Needed assets: `Mesh2D::UIRect` (unit square; `Mesh2D::UICircle` for the flat look), `Mesh2DPipe::Basic` or the SDF pipelines, `Font::Main`, `FontPipe::Basic` (names can be changed in `Style`).
-* **SDF look:** with the pipelines `Mesh2DPipe::UI` and `Mesh2DPipe::UISoft` (both `shader/mesh2d_ui.*`, registered as in `examples/main_ui.cpp`) every widget is drawn with signed distance fields instead of flat rectangles: rounded corners, borders, gradients, inner bevels, check / chevron / cross icons, soft drop shadows and glows, anti-aliased at any zoom, with animated hover / press transitions (`Style::animationTime`). Crisp shapes use alpha to coverage (`GraphicsPipelineConfig::alphaToCoverageEnable`, needs MSAA) so edges are anti-aliased independent of the draw order; translucent shapes, shadows and glows use the blended pipeline, which has to be registered after the first one (pipelines are drawn in registration order). The shape is described by `Mesh2D`: `color` = fill, `uvRect` = border color, `params` = radius, border width, softness, kind * 4 + gradient (see the header of `shader/mesh2d_ui.frag`), so you can use the shader for your own shapes too. **Colors:** the swapchain is `VK_FORMAT_B8G8R8A8_SRGB`, the GPU encodes linear to sRGB when it writes a pixel, so shaders must output linear values. The UI module therefore treats all UI colors (`Style`, and the `Color` fields of `Panel`, `Label`, `Button`, ...) as sRGB like in a color picker and converts them to linear (`Lu::UI::srgbToLinear`, `Style::srgbColors = false` if you give linear values yourself). The same applies to every `Mesh2D::color` / `Text::color` you set yourself: it is linear. The look is configured in `Style` (radius, gradient, shadow, bevel, text shadow, colors). Without the two pipelines the same widget tree is drawn flat.
-* `Mesh2D::clip` / `Text2D::clip` can name an entity with `Component::Clip2D{position, size}`. The clipping pipelines `Mesh2DPipe::UIClip` (`shader/mesh2d_clip.*`) and `FontPipe::UIClip` (`shader/font_clip.*`) clip mesh and glyph pixels to that rectangle. `Clip2D` is uploaded through its own GPU buffer; it does not use a Transform2D slot.
-
-</details>
 
 <details>
 <summary>Transform hierarchies (Transform / WorldTransform)</summary>
@@ -314,14 +281,9 @@ world.entity("Volume").child_of(window)
 
 ```
 WorldTransform = WorldTransform of the nearest ancestor with a Transform * Transform
-```
 
-* Adding, setting or removing a `Transform`, and (re)parenting an entity or a whole subtree, update the `WorldTransform` of the entity and of every descendant with a `Transform` (entities in between without a `Transform` are transparent). The order in which you create entities, add `Transform`s or set parents does not matter.
-* Removing the `Transform` removes the `WorldTransform`.
-* Entities without `Static` are recomputed every frame (parents first), so it is fine to write `Transform` directly, e.g. from physics, without calling `modified`.
-* `Static` only means "not streamed every frame": setting the `Transform` of a `Static` entity again still updates its `WorldTransform` and those of its children (sent once to the renderer). A `Static` entity can be the parent of non-`Static` entities. A `Static` child does not follow a moving parent until its own or an ancestor's `Transform` is set again.
-* The renderer receives the `WorldTransform` (`EcsRequest::CreateTransform / UpdateTransform`). Read `WorldTransform`, do not set it.
-* `Transform2D::positionZ` (layer) is added up along the hierarchy.
+WorldTransform == Transform if there is no ancestor with a Transform  
+```
 
 </details>
 
