@@ -2,6 +2,11 @@
 #include "../src/core/component/Mesh.hpp"
 #include <cassert>
 
+static std::vector<Lu::EcsRequest::EcsRequest> drainRequests(){
+    Lu::GetChannel().transfer();
+    return Lu::GetChannel().drain(10);
+}
+
 int main(){
     flecs::world world;
     Lu::Module::Mesh module(world);
@@ -12,32 +17,32 @@ int main(){
     auto firstChild = world.entity().child_of(parent);
 
     firstChild.set<Lu::Component::Mesh>({meshAsset, pipeline});
-    assert(Lu::GetChannel().drain(10).empty());
+    assert(drainRequests().empty());
     firstChild.set<Lu::Component::Material>({});
-    auto requests = Lu::GetChannel().drain(10);
+    auto requests = drainRequests();
     assert(requests.size() == 1);
     assert(std::holds_alternative<Lu::EcsRequest::CreateMesh>(requests[0]));
 
     firstChild.set<Lu::Component::Material>({});
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 1);
     assert(std::holds_alternative<Lu::EcsRequest::CreateMesh>(requests[0]));
 
     firstChild.remove<Lu::Component::Material>();
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 1);
     assert(std::holds_alternative<Lu::EcsRequest::DestroyMesh>(requests[0]));
     firstChild.set<Lu::Component::Material>({});
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 1);
     assert(std::holds_alternative<Lu::EcsRequest::CreateMesh>(requests[0]));
     firstChild.remove<Lu::Component::Mesh>();
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 1);
     assert(std::holds_alternative<Lu::EcsRequest::DestroyMesh>(requests[0]));
     firstChild.set<Lu::Component::Mesh>({meshAsset, pipeline});
     firstChild.set<Lu::Component::Material>({});
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 2);
     for(const auto& request : requests){
         assert(std::holds_alternative<Lu::EcsRequest::CreateMesh>(request));
@@ -45,19 +50,19 @@ int main(){
 
     auto secondChild = world.entity().child_of(parent);
     secondChild.set<Lu::Component::Material>({});
-    assert(Lu::GetChannel().drain(10).empty());
+    assert(drainRequests().empty());
     secondChild.set<Lu::Component::Mesh>({meshAsset, pipeline});
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 1);
     assert(std::holds_alternative<Lu::EcsRequest::CreateMesh>(requests[0]));
 
     auto deletedChild = world.entity().child_of(parent);
     deletedChild.set<Lu::Component::Mesh>({meshAsset, pipeline});
     deletedChild.set<Lu::Component::Material>({});
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 1);
     deletedChild.destruct();
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 1);
     assert(std::holds_alternative<Lu::EcsRequest::DestroyMesh>(requests[0]));
 
@@ -66,12 +71,12 @@ int main(){
     auto nonRenderable = world.entity().child_of(middle);
     nonRenderable.set<Lu::Component::Mesh>({meshAsset, pipeline});
     nonRenderable.set<Lu::Component::Material>({});
-    assert(Lu::GetChannel().drain(10).empty());
+    assert(drainRequests().empty());
     nonRenderable.remove<Lu::Component::Material>();
-    assert(Lu::GetChannel().drain(10).empty());
+    assert(drainRequests().empty());
 
     parent.remove<Lu::Component::Transform>();
-    requests = Lu::GetChannel().drain(10);
+    requests = drainRequests();
     assert(requests.size() == 2);
     for(const auto& request : requests){
         assert(std::holds_alternative<Lu::EcsRequest::DestroyMesh>(request));

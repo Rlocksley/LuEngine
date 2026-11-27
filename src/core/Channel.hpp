@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include "Global.hpp"
 #include "flecs.h"
 #include "component/Transform.hpp"
@@ -211,6 +212,7 @@ namespace Lu{
     class Channel{
         private:
             std::vector<EcsRequest::EcsRequest> requestQueue;
+            std::vector<EcsRequest::EcsRequest> transferredRequests;
             std::mutex queueMutex;
 
         public:
@@ -238,19 +240,27 @@ namespace Lu{
                     std::make_move_iterator(requests.end()));
             }
 
+            // Publish all requests produced during one ECS frame together.
+            // Requests sent after this call stay private until the next PostFrame.
+            void transfer(){
+                std::lock_guard<std::mutex> lock(queueMutex);
+                transferredRequests.reserve(transferredRequests.size() + requestQueue.size());
+                transferredRequests.insert(transferredRequests.end(),
+                    std::make_move_iterator(requestQueue.begin()),
+                    std::make_move_iterator(requestQueue.end()));
+                requestQueue.clear();
+            }
+
+            // Drain at most maxRequests from the PostFrame-published request queue.
             std::vector<EcsRequest::EcsRequest> drain(uint32_t maxRequests){
+                std::lock_guard<std::mutex> lock(queueMutex);
+                const size_t requestCount = std::min<size_t>(transferredRequests.size(), maxRequests);
                 std::vector<EcsRequest::EcsRequest> requests;
-                {
-                    std::lock_guard<std::mutex> lock(queueMutex);
-                    const size_t requestCount = requestQueue.size() < maxRequests
-                        ? requestQueue.size()
-                        : maxRequests;
-                    requests.reserve(requestCount);
-                    for(size_t index = 0; index < requestCount; ++index){
-                        requests.push_back(std::move(requestQueue[index]));
-                    }
-                    requestQueue.erase(requestQueue.begin(), requestQueue.begin() + requestCount);
+                requests.reserve(requestCount);
+                for(size_t index = 0; index < requestCount; ++index){
+                    requests.push_back(std::move(transferredRequests[index]));
                 }
+                transferredRequests.erase(transferredRequests.begin(), transferredRequests.begin() + requestCount);
                 return requests;
             }
     };

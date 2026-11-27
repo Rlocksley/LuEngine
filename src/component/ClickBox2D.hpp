@@ -39,6 +39,7 @@ struct ClickBox2D {
                      const Component::InputState, const Component::Clip2D*>("Update ClickBox2D")
             .term_at(0).up()
             .term_at(3).up().optional()
+            .kind(flecs::PostUpdate)
             .each([](flecs::entity e, const Component::WorldTransform2D& transform,
                      Component::ClickBox2D& box, const Component::InputState& input,
                      const Component::Clip2D* clip) {

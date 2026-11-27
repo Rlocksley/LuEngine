@@ -58,6 +58,7 @@ namespace Lu{
 
                 world.system<const Component::Mesh, const Component::Material>()
                 .with<Component::MeshGpuDirty>()
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestObjects3D"))
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> meshBuffer;
                     

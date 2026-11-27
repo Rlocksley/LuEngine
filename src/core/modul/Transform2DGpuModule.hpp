@@ -30,6 +30,7 @@ namespace Module {
             world.system<const Component::WorldTransform2D>("EcsRequest::CreateTransform2D System")
                 .with<Component::Transform2DGpu>()
                 .with<Component::Transform2DGpuDirty>()
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestTransform2D"))
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> requests;
 
@@ -55,7 +56,7 @@ namespace Module {
             world.system<const Component::WorldTransform2D>("EcsRequest::UpdateTransform2D System")
                 .with<Component::Transform2DGpu>()
                 .without<Component::Static>()
-                .kind(flecs::PostUpdate)   // after the propagation system of Module::Transform2D
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsUpdateTransform2D"))
                 .run([](flecs::iter it){
                     Core::GetTransform2DTripleBuffer().write(
                         [&](std::vector<EcsRequest::UpdateTransform2D>& buffer){

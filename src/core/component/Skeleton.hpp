@@ -69,6 +69,7 @@ namespace Lu{
 
                 world.system<const Component::Skeleton>("EcsRequest::CreateSkeleton System")
                     .with<Component::SkeletonGpuDirty>()
+                    .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestSkeleton3D"))
                     .run([](flecs::iter it){
                         std::vector<EcsRequest::EcsRequest> requests;
                         while(it.next()){
@@ -131,6 +132,7 @@ namespace Lu{
 
                 world.system<const Component::SkeletonMesh, const Component::Material>("EcsRequest::CreateSkeletonMesh System")
                     .with<Component::SkeletonMeshGpuDirty>()
+                    .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestObjects3D"))
                     .run([](flecs::iter it){
                         std::vector<EcsRequest::EcsRequest> requests;
                         while(it.next()){

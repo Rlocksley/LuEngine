@@ -37,6 +37,7 @@ namespace Lu{
 
                 world.system<const Component::Light>()
                 .with<Component::LightGpuDirty>()
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestObjects3D"))
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> lightBuffer;
                     

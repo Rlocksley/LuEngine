@@ -38,6 +38,7 @@ namespace Lu{
 
                 world.system<const Component::MultiMesh>("EcsRequest::CreateMultiMesh System")
                     .with<Component::MultiMeshGpuDirty>()
+                    .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestObjects3D"))
                     .run([](flecs::iter it){
                         std::vector<EcsRequest::EcsRequest> requests;
                         uint32_t processed = 0;

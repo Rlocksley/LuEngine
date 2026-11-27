@@ -23,6 +23,7 @@ namespace Module {
 
                 world.system<const Component::WorldTransform>("EcsRequest::CreateTransform System")
                 .with<Component::TransformGpuDirty>()
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestTransform3D"))
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> transformBuffer;
                     
@@ -61,6 +62,7 @@ namespace Module {
 
                 world.system<Component::MeshTransform>("EcsRequest::CreateMeshTransform System")
                 .with<Component::MeshTransformGpuDirty>()
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestMeshTransform3D"))
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> meshTransformBuffer;
 
@@ -86,6 +88,7 @@ namespace Module {
                 world.system<const Component::MeshTransform>()
                 .with<Component::TransformGpu>()
                 .without<Component::Static>()
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsUpdateMeshTransform3D"))
                 .run([](flecs::iter it){
                     Core::GetMeshTransformTripleBuffer().write(
                         [&](std::vector<EcsRequest::UpdateMeshTransform>& meshTransformBuffer){
@@ -99,11 +102,12 @@ namespace Module {
                         });
                 });
 
-                // PostUpdate: after the propagation system of Module::Transform wrote this frame's WorldTransforms
+                // This phase follows world-transform propagation so the snapshot
+                // agrees with the hierarchy values used by CreateTransform.
                 world.system<const Component::WorldTransform>()
                 .with<Component::TransformGpu>()
                 .without<Component::Static>()
-                .kind(flecs::PostUpdate)
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsUpdateTransform3D"))
                 .run([](flecs::iter it){
                     Core::GetTransformTripleBuffer().write(
                         [&](std::vector<EcsRequest::UpdateTransform>& transformBuffer){

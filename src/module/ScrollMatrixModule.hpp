@@ -25,7 +25,7 @@ struct UIScrollMatrix {
         world.observer<const Component::UIScrollMatrix, const Component::Transform2D>()
             .event(flecs::OnSet)
             .each([](flecs::entity e, const Component::UIScrollMatrix& matrix, const Component::Transform2D& transform) {
-                // The observer owns the row entities: discard the old hierarchy and rebuild slots from the updated matrix.
+                // The ECS request channel publishes changes atomically at PostFrame.
                 e.children([](flecs::entity child) { child.destruct(); });
                 flecs::world w = e.world();
 

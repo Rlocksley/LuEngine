@@ -15,6 +15,7 @@
 #include "modul/Camera2DModule.hpp"
 #include "modul/TextModule.hpp"
 #include "modul/Mesh2DModule.hpp"
+#include "modul/EcsRequestPhaseModule.hpp"
 #include "modul/TransformModule.hpp"
 #include "modul/Transform2DModule.hpp"
 #include "component/Mesh.hpp"
@@ -23,6 +24,7 @@
 #include "component/InputState.hpp"
 #include "PipelineConfig.hpp"
 #include "Exit.hpp"
+#include "Channel.hpp"
 
 namespace Lu{
 
@@ -282,6 +284,8 @@ namespace Lu{
         void run(){
 
             Core::FramerateMonitor framerateMonitor;
+
+            world->import<Module::EcsRequestPhases>();
             
             world->import<Module::Transform>();
             world->import<Module::TransformGpu>();
@@ -313,6 +317,11 @@ namespace Lu{
                 func(*world);
             }
             moduleFuncs.clear();
+
+            world->system("Transfer ECS requests to renderer")
+                .kind(world->lookup("Lu::Module::EcsRequestPhases::EcsRequestTransfer"))
+                .multi_threaded(false)
+                .each([](){ GetChannel().transfer(); });
 
             // flecs ecs thread
             std::thread ecsThread([&](){

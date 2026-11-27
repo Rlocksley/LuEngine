@@ -56,6 +56,7 @@ namespace Module {
 
             world.system<const Component::Mesh2D>("EcsRequest::CreateMesh2D System")
                 .with<Component::Mesh2DGpuDirty>()
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestVisual2D"))
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> requests;
 

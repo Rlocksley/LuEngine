@@ -188,6 +188,7 @@ struct ScrollMatrixDemo {
 
         addAction("InsertRandomMatrixItem", "Insert random item", {56.f, 570.f},
             [=](flecs::entity button) {
+                style(button, down, -0.22f, {}, 0.f, 3.f);
                 auto matrix = matrixEntity.get<Lu::Component::UIScrollMatrix>();
                 // Keep the current (eased) scroll position when the matrix is rebuilt.
                 if (const auto* state = matrixEntity.try_get<Lu::Component::UIScrollMatrixState>())
@@ -203,11 +204,11 @@ struct ScrollMatrixDemo {
                 });
                 matrixEntity.set<Lu::Component::UIScrollMatrix>(matrix);
                 setStatus("Inserted " + label + " at (" + std::to_string(i) + ", " + std::to_string(j) + ")");
-                style(button, hover, 0.14f, {}, 0.f, -1.f);
             });
 
         addAction("RemoveRandomMatrixItem", "Remove random item", {310.f, 570.f},
             [=](flecs::entity button) {
+                style(button, down, -0.22f, {}, 0.f, 3.f);
                 auto matrix = matrixEntity.get<Lu::Component::UIScrollMatrix>();
                 const uint32_t count = matrix.elementCount();
                 if (count == 0) {
@@ -224,7 +225,6 @@ struct ScrollMatrixDemo {
                 matrix.removeItem(i, j);
                 matrixEntity.set<Lu::Component::UIScrollMatrix>(matrix);
                 setStatus("Removed item " + removed + " at (" + std::to_string(i) + ", " + std::to_string(j) + ")");
-                style(button, hover, 0.14f, {}, 0.f, -1.f);
             });
     }
 };

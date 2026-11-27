@@ -12,13 +12,13 @@ namespace Lu {
             template<class Local, class World>
             struct TransformHierarchy {
 
-                static void install(flecs::world& world) {
+                static void install(flecs::world& world, flecs::entity_t propagationPhase = flecs::PostUpdate) {
                     world.component<Local>();
                     world.component<World>();
 
                     world.observer<const Local, const World*>()
                         .term_at(1).up()
-                        .event(flecs::OnAdd)
+                        //.event(flecs::OnAdd)
                         .event(flecs::OnSet)
                         .each([](flecs::entity e, const Local& local, const World* parentWorld) {
                             e.set<World>(parentWorld ? *parentWorld * local : World(local));
@@ -34,7 +34,7 @@ namespace Lu {
                     world.system<const Local, World, const World*>("Transform Propagation")
                         .without<Static>()
                         .term_at(2).cascade()
-                        .kind(flecs::PostUpdate)
+                        .kind(propagationPhase)
                         .each([](const Local& local, World& childWorld, const World* parentWorld) {
                             childWorld = parentWorld ? *parentWorld * local : World(local);
                         });

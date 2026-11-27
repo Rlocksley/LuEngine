@@ -7,7 +7,8 @@ namespace Lu{
     namespace Module {
         struct Transform2D {
             Transform2D(flecs::world& world) {
-                Component::Detail::TransformHierarchy<Component::Transform2D, Component::WorldTransform2D>::install(world);
+                Component::Detail::TransformHierarchy<Component::Transform2D, Component::WorldTransform2D>::install(
+                    world, world.lookup("Lu::Module::EcsRequestPhases::EcsWorldTransform2D").id());
             }
         };
     }

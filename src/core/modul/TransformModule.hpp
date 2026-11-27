@@ -10,7 +10,8 @@ namespace Lu{
             // Transform, WORLD if there is none. WorldTransform is added / updated / removed automatically.
             Transform(flecs::world& world){
                 world.component<Component::MeshTransform>();
-                Component::Detail::TransformHierarchy<Component::Transform, Component::WorldTransform>::install(world);
+                Component::Detail::TransformHierarchy<Component::Transform, Component::WorldTransform>::install(
+                    world, world.lookup("Lu::Module::EcsRequestPhases::EcsWorldTransform3D").id());
             }
         };
     }

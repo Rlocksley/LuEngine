@@ -55,6 +55,7 @@ namespace Module {
 
             world.system<const Component::Text2D>("EcsRequest::CreateText System")
                 .with<Component::Text2DGpuDirty>()
+                .kind(world.lookup("Lu::Module::EcsRequestPhases::EcsRequestVisual2D"))
                 .run([](flecs::iter it){
                     std::vector<EcsRequest::EcsRequest> requests;
 
